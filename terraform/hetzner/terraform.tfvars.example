@@ -1,0 +1,45 @@
+# ===========================================
+# Provider Credentials
+# ===========================================
+
+hcloud_token         = "your-hetzner-cloud-api-token"
+cloudflare_api_token = "your-cloudflare-api-token"
+cloudflare_zone_id   = "your-cloudflare-zone-id-for-elmstreet79-de"
+
+# ===========================================
+# Server Configuration
+# ===========================================
+
+ssh_public_key = "ssh-ed25519 AAAA... your-key"
+location       = "nbg1"   # Nürnberg
+server_type    = "cax11"  # ARM64, 2 vCPU, 4GB RAM
+
+# ===========================================
+# Pangolin Configuration
+# ===========================================
+
+pangolin_domain        = "pangolin.elmstreet79.de"
+pangolin_api_domain    = "pangolin-api.elmstreet79.de"
+pangolin_server_secret = "your-pangolin-server-secret"
+
+# ===========================================
+# SMTP Configuration (AWS SES)
+# ===========================================
+
+smtp_host = "email-smtp.eu-west-1.amazonaws.com"
+smtp_port = 587
+smtp_user = "your-aws-ses-smtp-user"
+smtp_pass = "your-aws-ses-smtp-password"
+smtp_from = "pangolin@elmstreet79.de"
+
+# ===========================================
+# MaxMind GeoLite2
+# ===========================================
+
+maxmind_license_key = "your-maxmind-license-key"
+
+# ===========================================
+# Let's Encrypt
+# ===========================================
+
+letsencrypt_email = "certs@seb-it.com"
