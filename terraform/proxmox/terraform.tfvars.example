@@ -22,6 +22,7 @@ ssh_public_key      = "ssh-ed25519 AAAAC3Nza... your-key-here"
 # ============================================
 minio_root_user     = "minio-admin"
 # minio_root_password: Set via TF_VAR_minio_root_password env var in ~/.zshrc
+# pbs_root_password: Set via TF_VAR_pbs_root_password env var in ~/.zshrc (Proxmox Backup Server VM root@pam)
 
 # ============================================
 # VM-specific configuration is now in vms/*.tf
