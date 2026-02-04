@@ -39,3 +39,8 @@ output "dns_records" {
     pangolin_api = "${var.pangolin_api_domain} -> ${hcloud_server.pangolin.ipv4_address}"
   }
 }
+
+output "get_setup_token" {
+  description = "Run this command to get the Pangolin setup token"
+  value       = "ssh pangolin@${hcloud_server.pangolin.ipv4_address} 'docker logs pangolin 2>&1 | grep Token:'"
+}
