@@ -1,13 +1,4 @@
 # ===========================================
-# SSH Key
-# ===========================================
-
-resource "hcloud_ssh_key" "pangolin" {
-  name       = "pangolin-ssh-key"
-  public_key = var.ssh_public_key
-}
-
-# ===========================================
 # Firewall
 # ===========================================
 
@@ -72,11 +63,12 @@ resource "hcloud_server" "pangolin" {
   server_type = var.server_type
   location    = var.location
 
-  ssh_keys = [hcloud_ssh_key.pangolin.id]
+  ssh_keys = [hcloud_ssh_key.homelab.id]
 
   firewall_ids = [hcloud_firewall.pangolin.id]
 
   user_data = templatefile("${path.module}/templates/cloud-init.yaml.tftpl", {
+    ssh_public_key         = var.ssh_public_key
     pangolin_domain        = var.pangolin_domain
     pangolin_api_domain    = var.pangolin_api_domain
     pangolin_server_secret = var.pangolin_server_secret
