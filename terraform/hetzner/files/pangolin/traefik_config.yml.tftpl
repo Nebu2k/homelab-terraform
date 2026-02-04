@@ -40,6 +40,8 @@ entryPoints:
     transport:
       respondingTimeouts:
         readTimeout: "30m"
+        writeTimeout: "30m"
+        idleTimeout: "30m"
     http:
       tls:
         certResolver: "letsencrypt"
