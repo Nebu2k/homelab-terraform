@@ -20,33 +20,6 @@ variable "cloudflare_zone_id" {
 }
 
 # ===========================================
-# Server Defaults
-# ===========================================
-
-variable "ssh_public_key" {
-  description = "SSH Public Key for VPS access"
-  type        = string
-}
-
-variable "location" {
-  description = "Hetzner Datacenter location"
-  type        = string
-  default     = "nbg1"
-}
-
-variable "server_type" {
-  description = "Hetzner Server Type"
-  type        = string
-  default     = "cax11"
-}
-
-variable "server_image" {
-  description = "Hetzner Server Image"
-  type        = string
-  default     = "ubuntu-24.04"
-}
-
-# ===========================================
 # SMTP / Email (AWS SES)
 # ===========================================
 

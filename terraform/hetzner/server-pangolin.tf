@@ -2,22 +2,22 @@
 # Pangolin Variables
 # ===========================================
 
+variable "pangolin_server_secret" {
+  description = "Pangolin server secret (from config.yml)"
+  type        = string
+  sensitive   = true
+}
+
 variable "pangolin_domain" {
-  description = "Main domain for Pangolin"
+  description = "Pangolin main domain"
   type        = string
   default     = "pangolin.elmstreet79.de"
 }
 
 variable "pangolin_api_domain" {
-  description = "API domain for Pangolin Integration API"
+  description = "Pangolin API domain"
   type        = string
   default     = "pangolin-api.elmstreet79.de"
-}
-
-variable "pangolin_server_secret" {
-  description = "Pangolin server secret (from config.yml)"
-  type        = string
-  sensitive   = true
 }
 
 variable "smtp_from" {
@@ -102,19 +102,18 @@ resource "hcloud_firewall" "pangolin" {
 
 resource "hcloud_server" "pangolin" {
   name        = "pangolin"
-  image       = var.server_image
-  server_type = var.server_type
-  location    = var.location
+  image       = "ubuntu-24.04"
+  server_type = "cx33"
+  location    = "nbg1"
 
   ssh_keys = [hcloud_ssh_key.homelab.id]
 
   firewall_ids = [hcloud_firewall.pangolin.id]
 
   user_data = templatefile("${path.module}/files/pangolin/cloud-init.yaml.tftpl", {
-    ssh_public_key         = var.ssh_public_key
+    ssh_public_key         = hcloud_ssh_key.homelab.public_key
     pangolin_domain        = var.pangolin_domain
     pangolin_api_domain    = var.pangolin_api_domain
-    pangolin_server_secret = var.pangolin_server_secret
     smtp_host              = var.smtp_host
     smtp_port              = var.smtp_port
     smtp_user              = var.smtp_user
