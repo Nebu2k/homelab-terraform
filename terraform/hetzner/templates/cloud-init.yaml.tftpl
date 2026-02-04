@@ -94,4 +94,9 @@ runcmd:
   # Start Pangolin stack
   - cd /opt/pangolin && docker compose up -d
 
-final_message: "Pangolin setup complete after $UPTIME seconds"
+power_state:
+  mode: reboot
+  message: "Rebooting after initial setup"
+  timeout: 30
+
+final_message: "Pangolin setup complete after $UPTIME seconds. Rebooting..."
