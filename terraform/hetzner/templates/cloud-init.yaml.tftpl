@@ -2,22 +2,20 @@
 
 # User configuration
 users:
+  - default
   - name: pangolin
     groups: [sudo, docker]
     shell: /bin/bash
     sudo: ['ALL=(ALL) NOPASSWD:ALL']
+    lock_passwd: true
     ssh_authorized_keys:
       - ${ssh_public_key}
 
-# Disable root login and password authentication
+# Disable password authentication
 ssh_pwauth: false
 
-runcmd_early:
-  - sed -i 's/^PermitRootLogin.*/PermitRootLogin no/' /etc/ssh/sshd_config
-  - sed -i 's/^#PermitRootLogin.*/PermitRootLogin no/' /etc/ssh/sshd_config
-  - sed -i 's/^PasswordAuthentication.*/PasswordAuthentication no/' /etc/ssh/sshd_config
-  - sed -i 's/^#PasswordAuthentication.*/PasswordAuthentication no/' /etc/ssh/sshd_config
-  - systemctl restart sshd
+# Disable root login
+disable_root: true
 
 package_update: true
 package_upgrade: true

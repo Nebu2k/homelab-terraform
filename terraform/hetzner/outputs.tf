@@ -19,7 +19,7 @@ output "server_id" {
 
 output "ssh_command" {
   description = "SSH command to connect to the server"
-  value       = "ssh root@${hcloud_server.pangolin.ipv4_address}"
+  value       = "ssh pangolin@${hcloud_server.pangolin.ipv4_address}"
 }
 
 output "pangolin_url" {
