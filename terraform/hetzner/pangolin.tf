@@ -63,6 +63,8 @@ resource "hcloud_server" "pangolin" {
   server_type = var.server_type
   location    = var.location
 
+  ssh_keys = [hcloud_ssh_key.homelab.id]
+
   firewall_ids = [hcloud_firewall.pangolin.id]
 
   user_data = templatefile("${path.module}/templates/cloud-init.yaml.tftpl", {
