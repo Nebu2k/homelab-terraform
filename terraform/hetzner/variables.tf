@@ -20,7 +20,7 @@ variable "cloudflare_zone_id" {
 }
 
 # ===========================================
-# Server Configuration
+# Server Defaults
 # ===========================================
 
 variable "ssh_public_key" {
@@ -47,29 +47,7 @@ variable "server_image" {
 }
 
 # ===========================================
-# Pangolin Configuration
-# ===========================================
-
-variable "pangolin_domain" {
-  description = "Main domain for Pangolin"
-  type        = string
-  default     = "pangolin.elmstreet79.de"
-}
-
-variable "pangolin_api_domain" {
-  description = "API domain for Pangolin Integration API"
-  type        = string
-  default     = "pangolin-api.elmstreet79.de"
-}
-
-variable "pangolin_server_secret" {
-  description = "Pangolin server secret (from config.yml)"
-  type        = string
-  sensitive   = true
-}
-
-# ===========================================
-# SMTP Configuration (AWS SES)
+# SMTP / Email (AWS SES)
 # ===========================================
 
 variable "smtp_host" {
@@ -96,24 +74,8 @@ variable "smtp_pass" {
   sensitive   = true
 }
 
-variable "smtp_from" {
-  description = "SMTP from address"
-  type        = string
-  default     = "pangolin@elmstreet79.de"
-}
-
 # ===========================================
-# MaxMind GeoLite2
-# ===========================================
-
-variable "maxmind_license_key" {
-  description = "MaxMind License Key for GeoLite2 database download"
-  type        = string
-  sensitive   = true
-}
-
-# ===========================================
-# Let's Encrypt
+# Certificates
 # ===========================================
 
 variable "letsencrypt_email" {
