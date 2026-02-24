@@ -148,6 +148,12 @@ variable "image_url" {
   default     = "https://cloud-images.ubuntu.com/noble/current/noble-server-cloudimg-amd64.img"
 }
 
+variable "image_file_name" {
+  description = "Override filename for the downloaded image (useful when URL extension is not accepted by Proxmox, e.g. .qcow2)"
+  type        = string
+  default     = ""
+}
+
 variable "image_storage" {
   description = "Storage for cloud image"
   type        = string

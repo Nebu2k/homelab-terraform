@@ -4,6 +4,7 @@ resource "proxmox_virtual_environment_download_file" "ubuntu_cloud_image" {
   datastore_id = var.image_storage
   node_name    = var.proxmox_node
   url          = var.image_url
+  file_name    = var.image_file_name != "" ? var.image_file_name : null
 
   overwrite           = false
   overwrite_unmanaged = true
