@@ -141,17 +141,28 @@ variable "cloud_init_write_files" {
   default = []
 }
 
-# Ubuntu Cloud Image
-variable "ubuntu_image_url" {
-  description = "Ubuntu cloud image URL"
+# Cloud Image
+variable "image_url" {
+  description = "Cloud image URL"
   type        = string
   default     = "https://cloud-images.ubuntu.com/noble/current/noble-server-cloudimg-amd64.img"
 }
 
-variable "ubuntu_image_storage" {
-  description = "Storage for Ubuntu cloud image"
+variable "image_storage" {
+  description = "Storage for cloud image"
   type        = string
   default     = "local"
+}
+
+variable "cloud_init_template" {
+  description = "Cloud-init template to use (ubuntu or arch)"
+  type        = string
+  default     = "ubuntu"
+
+  validation {
+    condition     = contains(["ubuntu", "arch"], var.cloud_init_template)
+    error_message = "cloud_init_template must be 'ubuntu' or 'arch'."
+  }
 }
 
 variable "cloud_init_filename" {

@@ -1,0 +1,100 @@
+#cloud-config
+# Cloud-init configuration for Arch Linux Proxmox VMs
+
+# Don't wait for network during boot (critical for static IP)
+datasource:
+  None:
+    preferred: true
+datasource_list: [None]
+
+# ============================================================================
+# SYSTEM CONFIGURATION
+# ============================================================================
+
+hostname: ${vm_name}
+manage_etc_hosts: true
+preserve_hostname: false
+fqdn: ${vm_name}.homelab
+
+# ============================================================================
+# NETWORK CONFIGURATION (systemd-networkd)
+# ============================================================================
+
+write_files:
+  - path: /etc/systemd/network/20-wired.network
+    content: |
+      [Match]
+      Name=en*
+
+      [Network]
+      Address=${vm_ip_address}
+      Gateway=${vm_gateway}
+      DNS=${dns_server_1}
+      DNS=${dns_server_2}
+%{ for file in cloud_init_write_files ~}
+  - path: ${file.path}
+    permissions: '${file.permissions}'
+    content: |
+      ${indent(6, file.content)}
+%{ endfor ~}
+
+# ============================================================================
+# SECURITY & SSH CONFIGURATION
+# ============================================================================
+
+ssh_pwauth: false
+disable_root: true
+permit_root_login: false
+
+users:
+  - name: ${cloud_init_user}
+    gecos: Cloud-init user
+    groups: [wheel]
+    shell: /bin/bash
+    sudo: ALL=(ALL) NOPASSWD:ALL
+    lock_passwd: true
+    ssh_authorized_keys:
+      - ${ssh_public_key}
+
+# ============================================================================
+# PACKAGE MANAGEMENT
+# ============================================================================
+
+package_update: true
+package_upgrade: true
+package_reboot_if_required: false
+
+packages:
+  - qemu-guest-agent
+%{ for pkg in cloud_init_packages ~}
+  - ${pkg}
+%{ endfor ~}
+
+# ============================================================================
+# RUNTIME COMMANDS
+# ============================================================================
+
+bootcmd:
+  - mkdir -p /home/${cloud_init_user}/.ssh
+  - chmod 700 /home/${cloud_init_user}/.ssh
+
+runcmd:
+  - sleep 5
+  - systemctl enable --now systemd-networkd
+  - systemctl enable --now systemd-resolved
+  - chown -R ${cloud_init_user}:${cloud_init_user} /home/${cloud_init_user}/.ssh
+  - chmod 600 /home/${cloud_init_user}/.ssh/authorized_keys
+  - systemctl enable --now qemu-guest-agent
+%{ for cmd in cloud_init_runcmd ~}
+  - |
+    ${indent(4, cmd)}
+%{ endfor ~}
+
+# ============================================================================
+# LOGGING & OUTPUT
+# ============================================================================
+
+output:
+  all: "| tee -a /var/log/cloud-init-output.log"
+
+final_message: "Cloud-init completed successfully for ${vm_name}"

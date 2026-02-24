@@ -1,9 +1,9 @@
 # Download Ubuntu Cloud Image (shared across all VMs using this module)
 resource "proxmox_virtual_environment_download_file" "ubuntu_cloud_image" {
   content_type = "iso"
-  datastore_id = var.ubuntu_image_storage
+  datastore_id = var.image_storage
   node_name    = var.proxmox_node
-  url          = var.ubuntu_image_url
+  url          = var.image_url
 
   overwrite           = false
   overwrite_unmanaged = true
@@ -74,6 +74,7 @@ resource "proxmox_virtual_environment_vm" "vm" {
   lifecycle {
     ignore_changes = [
       started,
+      disk[0].file_id,
     ]
   }
 }
@@ -85,7 +86,7 @@ resource "proxmox_virtual_environment_file" "cloud_init_user_data" {
   node_name    = var.proxmox_node
 
   source_raw {
-    data = templatefile("${path.module}/cloud-init.yaml.tftpl", {
+    data = templatefile("${path.module}/${var.cloud_init_template == "arch" ? "cloud-init-arch" : "cloud-init"}.yaml.tftpl", {
       vm_name                = var.vm_name
       cloud_init_user        = var.cloud_init_user
       ssh_public_key         = var.ssh_public_key
@@ -93,6 +94,7 @@ resource "proxmox_virtual_environment_file" "cloud_init_user_data" {
       dns_server_2           = length(var.vm_dns_servers) > 1 ? var.vm_dns_servers[1] : "8.8.8.8"
       cloud_init_packages    = var.cloud_init_packages
       cloud_init_runcmd      = var.cloud_init_runcmd
+      cloud_init_write_files = var.cloud_init_write_files
       vm_ip_address          = var.vm_ip_address
       vm_gateway             = var.vm_gateway
     })
