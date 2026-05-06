@@ -12,6 +12,7 @@ module "vm_arch" {
   vm_name        = "vm-arch"
   vm_id          = 103
   vm_description = "Arch Linux VM with cloud-init configuration"
+  vm_on_boot     = false
 
   # Cloud Image
   image_url           = "https://geo.mirror.pkgbuild.com/images/latest/Arch-Linux-x86_64-cloudimg.qcow2"
