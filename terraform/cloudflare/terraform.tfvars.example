@@ -1,0 +1,10 @@
+# Example Terraform Variables File
+# Copy this file to terraform.tfvars and fill in your actual values.
+# terraform.tfvars is gitignored and will not be committed.
+
+cloudflare_api_token = "your-cloudflare-api-token"
+cloudflare_zone_id   = "your-zone-id-for-elmstreet79.de"
+
+# Optional overrides (defaults are usually fine):
+# dyndns_target = "nebu2k.ipv64.net"
+# public_hosts  = ["www", "dreambox", "homeassistant", "plex", "teslamate"]
