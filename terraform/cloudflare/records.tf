@@ -21,3 +21,17 @@ resource "cloudflare_record" "public" {
   proxied = false
   comment = "managed-by: terraform (public exposure)"
 }
+
+# Apex (nackte Domain). Cloudflare flacht den CNAME am Zone-Root automatisch auf
+# A/AAAA ab (CNAME-Flattening) und lässt ihn mit den MX/TXT-Records koexistieren,
+# stört die iCloud-Mail also nicht. Traefik leitet Host `elmstreet79.de` per
+# 301 auf www weiter (manifests/landing-page/apex-redirect.yaml).
+resource "cloudflare_record" "apex" {
+  zone_id = var.cloudflare_zone_id
+  name    = var.domain
+  content = var.dyndns_target
+  type    = "CNAME"
+  ttl     = 300
+  proxied = false
+  comment = "managed-by: terraform (apex -> www)"
+}
