@@ -6,10 +6,6 @@ terraform {
       source  = "bpg/proxmox"
       version = ">= 0.93.0, < 1.0.0"
     }
-    minio = {
-      source  = "aminueza/minio"
-      version = "~> 2.0"
-    }
   }
 }
 
@@ -25,9 +21,13 @@ provider "proxmox" {
   }
 }
 
-provider "minio" {
-  minio_server   = "192.168.2.15:9000"
-  minio_user     = var.minio_root_user
-  minio_password = var.minio_root_password
-  minio_ssl      = false
-}
+# Der minio-Provider ist am 2026-08-01 entfallen. Longhorn sichert seit dem
+# Wechsel des BackupTargets direkt per CIFS aufs UniFi-NAS, MinIO hat keinen
+# Nutzer mehr und die VM ist gestoppt.
+#
+# Wichtig, falls das je zurueckkommt: der Provider zeigte fest auf
+# 192.168.2.15:9000 und wurde bei JEDEM plan/apply initialisiert. Mit
+# gestoppter VM haette das den ganzen Stack blockiert, auch fuer Aenderungen,
+# die mit MinIO nichts zu tun haben. Deshalb ist die Bucket-Ressource per
+# "terraform state rm" aus dem State genommen worden statt per destroy: der
+# Bucket-Inhalt auf der VM-Disk bleibt so erhalten.

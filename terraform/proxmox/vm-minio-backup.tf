@@ -17,6 +17,17 @@ module "minio_backup" {
   # Keep original cloud-init filename to avoid recreation
   cloud_init_filename = "minio-cloud-init.yaml"
 
+  # Stillgelegt am 2026-08-01: Longhorn sichert direkt per CIFS aufs UniFi-NAS,
+  # MinIO hat keinen Nutzer mehr. Die VM ist gestoppt, aber bewusst NICHT
+  # zerstoert, damit der alte Backup-Bestand auf der Disk erreichbar bleibt,
+  # solange der erste naechtliche Lauf aufs NAS noch aussteht.
+  #
+  # on_boot muss hier stehen und nicht nur per "qm set": das vm-module hat zwar
+  # "started" in ignore_changes (ein manuelles Stoppen ueberlebt also ein
+  # apply), on_boot aber nicht. Ohne diese Zeile wuerde der naechste apply die
+  # VM wieder auf Autostart setzen.
+  vm_on_boot = false
+
   # Resources
   vm_cpu_cores = 2
   vm_memory    = 4096
