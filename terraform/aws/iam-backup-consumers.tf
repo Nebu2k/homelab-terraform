@@ -316,7 +316,83 @@ resource "aws_iam_user_policy_attachment" "home_assistant_archive" {
 }
 
 # ===========================================
-# Frische-Sonde ueber alle drei Buckets
+# k3s etcd-Snapshots
+# ===========================================
+
+# Konsument ist k3s selbst auf den drei Server-Nodes (cp-1, raspi4, raspi5),
+# nicht ein Workload im Cluster. Die Zugangsdaten liegen im Secret
+# "k3s-etcd-s3-config" im Namespace kube-system, auf das die Units per
+# "--etcd-s3-config-secret" zeigen.
+#
+# Das ist der einzige Konsument, dessen Key NICHT von einem Pod gelesen wird,
+# sondern vom k3s-Server-Prozess. Der Umweg ueber ein Secret statt
+# "--etcd-s3-access-key" in der Unit ist Absicht: sonst staende der Key im
+# Klartext in drei systemd-Units, und jede Rotation waere drei Unit-Edits mit
+# Quorum-Check statt eines Commits.
+resource "aws_iam_user" "etcd_backup" {
+  name = "homelab-etcd-backup"
+
+  tags = {
+    Name      = "k3s-etcd-snapshot-offsite"
+    ManagedBy = "terraform"
+  }
+}
+
+# Kein DeleteObject und kein DeleteObjectVersion, wie bei allen ausser HA. Das
+# ist hier eine echte Entscheidung und keine Uebernahme des Musters, denn k3s
+# WUERDE loeschen wollen: "--etcd-s3-retention" raeumt alte Snapshots selbst aus
+# dem Bucket. Der Wert in der Unit ist deshalb unerreichbar hoch gesetzt
+# (var.etcd_s3_retention), aufgeraeumt wird ausschliesslich per Lifecycle.
+#
+# Der Gewinn ist derselbe wie ueberall sonst: ein kompromittierter Cluster kann
+# ueber diesen Key keinen einzigen Snapshot entfernen. Er waere hier besonders
+# teuer, weil dieser Bucket der einzige Ort ausserhalb des Clusters ist, an dem
+# die Sealing-Keys liegen.
+#
+# GetObject ist drin, obwohl der Schreibpfad es nicht braucht. k3s listet und
+# liest beim Start seine S3-Snapshots, um die ConfigMap k3s-etcd-snapshots zu
+# fuellen, und der Restore-Weg ("k3s server --cluster-reset
+# --etcd-s3 --cluster-reset-restore-path=...") laedt den Snapshot ueber genau
+# diesen Key wieder herunter. Ohne GetObject steht man im Ernstfall vor einem
+# vollen Bucket, den man erst per Konsole aufmachen muss.
+resource "aws_iam_policy" "etcd_backup" {
+  name        = "etcd-backup"
+  path        = "/homelab/"
+  description = "Schreib- und Lesezugriff der k3s-Server-Nodes auf den etcd-Snapshot-Bucket"
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid    = "ListOwnBucket"
+        Effect = "Allow"
+        # Nackter Bucket-ARN. k3s listet den Bucket bei jedem Snapshot-Lauf, um
+        # seine Retention zu bestimmen, und beim Start fuer die ConfigMap.
+        Action   = ["s3:ListBucket"]
+        Resource = [aws_s3_bucket.etcd_snapshots.arn]
+      },
+      {
+        Sid    = "ReadWriteOwnObjects"
+        Effect = "Allow"
+        Action = [
+          "s3:PutObject",
+          "s3:GetObject",
+          # Ein Snapshot liegt bei rund 48 MB und geht als Multipart hoch.
+          "s3:AbortMultipartUpload",
+        ]
+        Resource = ["${aws_s3_bucket.etcd_snapshots.arn}/*"]
+      },
+    ]
+  })
+}
+
+resource "aws_iam_user_policy_attachment" "etcd_backup" {
+  user       = aws_iam_user.etcd_backup.name
+  policy_arn = aws_iam_policy.etcd_backup.arn
+}
+
+# ===========================================
+# Frische-Sonde ueber alle vier Buckets
 # ===========================================
 
 # Konsument ist der CronJob "offsite-backup-freshness"
@@ -330,8 +406,13 @@ resource "aws_iam_user_policy_attachment" "home_assistant_archive" {
 # Log schreibt, und bei HA gibt es ueberhaupt keinen Job, den man beobachten
 # koennte.
 #
-# Deshalb hat dieser User als einziger Zugriff auf ALLE drei Buckets, und
-# deshalb darf er als einziger gar nichts damit tun ausser sie aufzulisten.
+# Deshalb hat dieser User als einziger Zugriff auf ALLE Buckets, und deshalb
+# darf er als einziger gar nichts damit tun ausser sie aufzulisten.
+#
+# Seit dem etcd-Bucket sind es vier. Gerade dort ist die Sonde der einzige
+# Beleg: k3s laedt seine Snapshots im Server-Prozess hoch, es gibt keinen
+# CronJob und keinen Pod-Status, an dem ein Fehlschlag sichtbar waere, sondern
+# nur eine Zeile im journal auf der jeweiligen Node.
 resource "aws_iam_user" "backup_monitor" {
   name = "homelab-backup-monitor"
 
@@ -351,10 +432,19 @@ resource "aws_iam_user" "backup_monitor" {
 # bestehenden: kein Konsument darf in die Buckets der anderen sehen, und die
 # Sonde muss in alle drei sehen. Genau eine Richtung dieser Kreuzung ist
 # harmlos, naemlich diese.
+# FALLE, hier einmal teuer bezahlt: "description" an aws_iam_policy ist ForceNew.
+# AWS kennt keinen Aufruf, der die Beschreibung einer Policy aendert, Terraform
+# loescht sie also und legt sie neu an, inklusive Detach und Attach. Genau das
+# passierte beim Hinzufuegen des vierten Buckets, weil in der Beschreibung
+# "drei Backup-Buckets" stand.
+#
+# Die Beschreibungen hier zaehlen deshalb nichts mehr. Die Resource-Liste unten
+# darf wachsen, ohne dass die Policy dabei durch ein Loch laeuft, in dem die
+# Sonde keine Rechte hat.
 resource "aws_iam_policy" "backup_monitor" {
   name        = "backup-monitor"
   path        = "/homelab/"
-  description = "Nur-Listing ueber alle drei Backup-Buckets fuer die Frische-Sonde"
+  description = "Nur-Listing ueber die Offsite-Backup-Buckets fuer die Frische-Sonde"
 
   policy = jsonencode({
     Version = "2012-10-17"
@@ -370,6 +460,7 @@ resource "aws_iam_policy" "backup_monitor" {
           aws_s3_bucket.paperless.arn,
           aws_s3_bucket.home_assistant.arn,
           aws_s3_bucket.teslamate.arn,
+          aws_s3_bucket.etcd_snapshots.arn,
         ]
       },
     ]

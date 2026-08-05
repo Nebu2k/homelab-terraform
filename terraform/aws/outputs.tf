@@ -13,6 +13,24 @@ output "backup_buckets" {
       versioning = aws_s3_bucket_versioning.teslamate.versioning_configuration[0].status
       retention  = "'${var.teslamate_daily_prefix}' ${var.teslamate_daily_days} Tage, '${var.teslamate_monthly_prefix}' ${var.teslamate_monthly_days} Tage, noncurrent ${var.teslamate_noncurrent_days} Tage"
     }
+    (var.etcd_snapshots_bucket) = {
+      versioning = aws_s3_bucket_versioning.etcd_snapshots.versioning_configuration[0].status
+      retention  = "${var.etcd_snapshot_days} Tage, noncurrent ${var.etcd_snapshot_noncurrent_days} Tage, k3s raeumt nicht mit (--etcd-s3-retention ${var.etcd_s3_retention})"
+    }
+  }
+}
+
+# Die zwei Flags, die in die k3s.service JEDER Server-Node gehoeren. Sie stehen
+# hier, weil sie aus diesem Stack abgeleitet sind, aber nur auf den Nodes
+# wirken: die Unit-Dateien liegen nicht im Repo. Aendert sich der Bucket-Name
+# oder die Retention hier, muessen alle drei Nodes einzeln nachgezogen werden,
+# und zwar mit Quorum-Check.
+output "k3s_etcd_s3_flags" {
+  description = "Flags fuer die k3s.service auf cp-1, raspi4 und raspi5"
+  value = {
+    flags  = "--etcd-s3 --etcd-s3-config-secret=k3s-etcd-s3-config"
+    secret = "k3s-etcd-s3-config, Namespace kube-system (SealedSecret in kubernetes-homelab/manifests/sealed-secrets/)"
+    inhalt = "bucket=${var.etcd_snapshots_bucket}, region=${var.aws_region}, retention=${var.etcd_s3_retention}"
   }
 }
 
@@ -28,5 +46,6 @@ output "backup_consumer_users" {
     (aws_iam_user.home_assistant_backup.name)  = "HA-UI, S3-Integration (nicht im Repo, liegt auf dem Longhorn-Volume)"
     (aws_iam_user.home_assistant_archive.name) = "Secret s3-archive-credentials, Namespace home-assistant"
     (aws_iam_user.backup_monitor.name)         = "Secret s3-backup-monitor-credentials, Namespace monitoring"
+    (aws_iam_user.etcd_backup.name)            = "Secret k3s-etcd-s3-config, Namespace kube-system (liest k3s selbst, nicht ein Pod)"
   }
 }

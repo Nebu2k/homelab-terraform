@@ -57,6 +57,43 @@ variable "teslamate_noncurrent_days" {
   default     = 30
 }
 
+variable "etcd_snapshots_bucket" {
+  description = "Bucket mit den etcd-Snapshots der drei k3s-Server-Nodes"
+  type        = string
+  default     = "homelab-etcd-snapshots-elmstreet79"
+}
+
+variable "etcd_snapshot_days" {
+  description = "Aufbewahrung der etcd-Snapshots in S3"
+  type        = number
+  default     = 30
+}
+
+variable "etcd_snapshot_noncurrent_days" {
+  description = "Aufbewahrung ueberschriebener etcd-Snapshot-Versionen (Ransomware-Fenster)"
+  type        = number
+  default     = 30
+}
+
+# k3s hat mit "--etcd-s3-retention" eine eigene Retention und loescht darueber
+# hinausgehende Snapshots selbst aus dem Bucket. Das soll es hier NICHT tun,
+# aufgeraeumt wird per Lifecycle, damit der IAM-User ohne DeleteObject auskommt.
+#
+# Der Wert ist deshalb bewusst unerreichbar hoch gewaehlt: 3 Server-Nodes mal 2
+# Snapshots taeglich mal etcd_snapshot_days sind rund 180 Objekte, und mehr
+# werden es nie, weil die Lifecycle-Regel am anderen Ende abraeumt. k3s kommt
+# nie an seine Schwelle und versucht nie zu loeschen.
+#
+# Diese Variable steuert NICHTS an der AWS-Seite. Sie steht hier, weil der Wert
+# in die k3s-Unit auf allen drei Nodes gehoert und die Begruendung dafuer an
+# derselben Stelle stehen soll wie die Lifecycle-Regel, gegen die sie sich
+# richtet. Wer sie senkt, muss dem User DeleteObject geben.
+variable "etcd_s3_retention" {
+  description = "Wert fuer --etcd-s3-retention in der k3s-Unit, absichtlich unerreichbar hoch"
+  type        = number
+  default     = 1000
+}
+
 variable "multipart_abort_days" {
   description = "Alter, ab dem abgebrochene Multipart-Uploads verworfen werden"
   type        = number
