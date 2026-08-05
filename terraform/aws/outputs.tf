@@ -17,8 +17,15 @@ output "backup_buckets" {
 }
 
 # Der naechste Schritt nach dem apply ist ein Handgriff in der Konsole, deshalb
-# steht er hier und nicht nur in der Doku.
-output "teslamate_backup_user" {
-  description = "IAM-User des Teslamate-Backups. Access Key dafuer von Hand in der Konsole erzeugen, Terraform tut das bewusst nicht (siehe iam-backup-consumers.tf)."
-  value       = aws_iam_user.teslamate_backup.name
+# steht er hier und nicht nur in der Doku: Terraform legt bewusst keine
+# aws_iam_access_key an (Begruendung in iam-backup-consumers.tf), die Keys
+# entstehen einmal in der Konsole und kommen per kubeseal ins Cluster.
+output "backup_consumer_users" {
+  description = "IAM-User je Backup-Konsument und wohin ihr Access Key gehoert"
+  value = {
+    (aws_iam_user.teslamate_backup.name)       = "Secret s3-teslamate-backup-credentials, Namespace teslamate"
+    (aws_iam_user.paperless_backup.name)       = "Secret s3-backup-credentials, Namespace paperless-ngx"
+    (aws_iam_user.home_assistant_backup.name)  = "HA-UI, S3-Integration (nicht im Repo, liegt auf dem Longhorn-Volume)"
+    (aws_iam_user.home_assistant_archive.name) = "Secret s3-archive-credentials, Namespace home-assistant"
+  }
 }

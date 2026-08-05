@@ -18,10 +18,23 @@
 #    zweizeilige Form: Bucket-ARN fuer ListBucket, Bucket-ARN + "/*" fuer alles
 #    auf Objektebene.
 #
-# Diese Datei ist der Anfang der Abloesung. Teslamate kommt als erster
-# Konsument sauber getrennt zur Welt und ist die Blaupause fuer den Rest
-# (Roadmap Punkt 4: eigene User fuer Paperless, HA und Archiv-Job, danach
-# homelab-backup abschalten).
+# Teslamate kam als erster Konsument sauber getrennt zur Welt und war die
+# Blaupause. Seit 2026-08-05 stehen die drei uebrigen daneben: paperless, Home
+# Assistant und der HA-Archiv-Job. Damit hat jeder Konsument seinen eigenen
+# User, seine eigene bucket-scoped Policy und seinen eigenen Access Key.
+#
+# ================== Warum drei und nicht einer ==================
+#
+# Weil sie unterschiedlich viel duerfen muessen, und das ist der ganze Punkt der
+# Trennung. Nur HA braucht DeleteObject, weil es seine Retention selbst faehrt.
+# paperless synct ohne "--delete" und der Archiv-Job kopiert nur, beide loeschen
+# nie. Ein gemeinsamer Key haette zwangslaeufig das Maximum aller drei gekonnt,
+# und genau das war der Ist-Zustand: DeleteObject auf beiden Buckets fuer einen
+# Konsumenten, der es nie braucht.
+#
+# Der zweite Gewinn ist die Rotation. Ein geteilter Key laesst sich nicht
+# tauschen, ohne alle Konsumenten gleichzeitig anzufassen, deshalb wurde er neun
+# Monate lang nicht getauscht. Drei getrennte Keys rotieren einzeln.
 #
 # ================== Was hier bewusst NICHT steht ==================
 #
@@ -104,4 +117,200 @@ resource "aws_iam_policy" "teslamate_backup" {
 resource "aws_iam_user_policy_attachment" "teslamate_backup" {
   user       = aws_iam_user.teslamate_backup.name
   policy_arn = aws_iam_policy.teslamate_backup.arn
+}
+
+# ===========================================
+# paperless-ngx
+# ===========================================
+
+# Konsument ist der Sidecar "s3-backup-sync" im paperless-Deployment
+# (kubernetes-homelab/manifests/paperless-ngx/deployment.yaml), Secret
+# "s3-backup-credentials" im Namespace paperless-ngx.
+resource "aws_iam_user" "paperless_backup" {
+  name = "homelab-paperless-backup"
+
+  tags = {
+    Name      = "paperless-offsite-backup"
+    ManagedBy = "terraform"
+  }
+}
+
+# Kein DeleteObject, und das faellt hier nicht schwer: der Sidecar macht
+# "aws s3 sync" OHNE "--delete". Er hat also noch nie ein Objekt entfernt, der
+# alte geteilte Key trug das Recht nur mit, weil HA es brauchte.
+#
+# Auch keine Einschraenkung auf das Praefix "paperless-backup/", obwohl der
+# Sidecar nur dorthin schreibt. Der Bucket gehoert ausschliesslich diesem
+# Konsumenten, eine Praefix-Bedingung wuerde nichts zusaetzlich schuetzen und
+# beim ersten Restore in ein anderes Verzeichnis im Weg stehen.
+resource "aws_iam_policy" "paperless_backup" {
+  name        = "paperless-backup"
+  path        = "/homelab/"
+  description = "Schreibzugriff des paperless-Export-Sidecars auf genau seinen Bucket"
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid      = "ListOwnBucket"
+        Effect   = "Allow"
+        Action   = ["s3:ListBucket"]
+        Resource = [aws_s3_bucket.paperless.arn]
+      },
+      {
+        Sid    = "ReadWriteOwnObjects"
+        Effect = "Allow"
+        Action = [
+          "s3:PutObject",
+          # GetObject braucht "s3 sync" nicht zum Hochladen, es vergleicht ueber
+          # die Listing-Metadaten. Es steht hier fuer den Rueckweg: ein Restore
+          # ist ein "s3 sync" in die Gegenrichtung, und der soll nicht daran
+          # scheitern, dass erst jemand eine Policy anfassen muss.
+          "s3:GetObject",
+          "s3:AbortMultipartUpload",
+        ]
+        Resource = ["${aws_s3_bucket.paperless.arn}/*"]
+      },
+    ]
+  })
+}
+
+resource "aws_iam_user_policy_attachment" "paperless_backup" {
+  user       = aws_iam_user.paperless_backup.name
+  policy_arn = aws_iam_policy.paperless_backup.arn
+}
+
+# ===========================================
+# Home Assistant (die Instanz selbst)
+# ===========================================
+
+# Konsument ist HAs eingebaute S3-Backup-Integration. Ihr Key steht NICHT im
+# Repo, sondern in der HA-Konfiguration auf dem Longhorn-Volume, eingetragen
+# ueber die HA-UI. Das ist der einzige der vier Konsumenten, dessen Key nicht
+# per kubeseal ins Cluster kommt.
+resource "aws_iam_user" "home_assistant_backup" {
+  name = "homelab-home-assistant-backup"
+
+  tags = {
+    Name      = "home-assistant-offsite-backup"
+    ManagedBy = "terraform"
+  }
+}
+
+# Der EINZIGE Konsument mit DeleteObject, und das ist Absicht statt Nachlaessigkeit:
+# HA fuehrt seine Retention selbst ("behalte N automatische Backups") und muss
+# dafuer alte Staende aus dem Bucket entfernen. Nimmt man ihm das Recht, laeuft
+# der Bucket unbegrenzt voll und niemand merkt es, weil das Hochladen weiter
+# klappt.
+#
+# Was ihm bewusst fehlt, ist s3:DeleteObjectVersion. Das ist die Bedingung, unter
+# der Versioning an diesem Bucket ueberhaupt etwas taugt (siehe die lange
+# Begruendung in s3-backup-buckets.tf): HAs Loeschen setzt dann nur einen
+# Delete-Marker, der eigentliche Stand liegt als noncurrent version darunter und
+# ueberlebt einen kompromittierten Cluster.
+#
+# Ebenfalls nicht drin: s3:GetObjectTagging. HA setzt keine Tags und liest keine.
+resource "aws_iam_policy" "home_assistant_backup" {
+  name        = "home-assistant-backup"
+  path        = "/homelab/"
+  description = "Zugriff der HA-eigenen S3-Backup-Integration, inkl. Delete fuer HAs eigene Retention"
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid    = "ListOwnBucket"
+        Effect = "Allow"
+        # ListBucket deckt neben dem Listing auch HeadBucket ab, mit dem die
+        # Integration beim Einrichten prueft, ob der Bucket erreichbar ist.
+        Action   = ["s3:ListBucket"]
+        Resource = [aws_s3_bucket.home_assistant.arn]
+      },
+      {
+        Sid    = "ReadWriteDeleteOwnObjects"
+        Effect = "Allow"
+        Action = [
+          "s3:PutObject",
+          "s3:GetObject",
+          "s3:DeleteObject",
+          # Die Tars liegen bei rund 490 MB, HA laedt sie als Multipart hoch.
+          "s3:AbortMultipartUpload",
+        ]
+        Resource = ["${aws_s3_bucket.home_assistant.arn}/*"]
+      },
+    ]
+  })
+}
+
+resource "aws_iam_user_policy_attachment" "home_assistant_backup" {
+  user       = aws_iam_user.home_assistant_backup.name
+  policy_arn = aws_iam_policy.home_assistant_backup.arn
+}
+
+# ===========================================
+# Home Assistant, Monatsarchiv
+# ===========================================
+
+# Konsument ist der CronJob "ha-backup-archive"
+# (kubernetes-homelab/manifests/home-assistant/backup-archive-cronjob.yaml),
+# Secret "s3-archive-credentials" im Namespace home-assistant.
+#
+# Eigener User, obwohl derselbe Bucket: der Job braucht deutlich weniger als HA.
+# Er kopiert einen Stand server-seitig auf einen zweiten Key und loescht nie.
+# Genau die Archivstaende, die er anlegt, soll ein kompromittierter Cluster ueber
+# diesen Key nicht wieder entfernen koennen.
+resource "aws_iam_user" "home_assistant_archive" {
+  name = "homelab-home-assistant-archive"
+
+  tags = {
+    Name      = "home-assistant-monthly-archive"
+    ManagedBy = "terraform"
+  }
+}
+
+# Der Zuschnitt folgt exakt den drei API-Aufrufen des Jobs:
+#
+#   list-objects-v2  -> s3:ListBucket   (Idempotenz-Pruefung + juengstes Tar suchen)
+#   copy-object      -> s3:GetObject auf der Quelle, s3:PutObject auf dem Ziel
+#   head-object      -> s3:GetObject   (Groessenvergleich als Gegenprobe)
+#
+# Kein AbortMultipartUpload: copy-object kopiert in einem Durchgang bis 5 GB, es
+# gibt hier keinen Multipart-Upload zum Abbrechen. Waechst ein HA-Tar je
+# darueber, braucht der Job einen Multipart-Copy und diese Policy die
+# entsprechenden Rechte dazu.
+#
+# Kein GetObjectTagging, und zwar bewusst: genau daran scheiterte der erste
+# Testlauf mit "aws s3 cp". Der Job benutzt seitdem "s3api copy-object
+# --tagging-directive REPLACE" und kommt ohne aus. Wer dieses Recht hier
+# nachtraegt, macht die Ursache unsichtbar, statt sie zu beheben.
+resource "aws_iam_policy" "home_assistant_archive" {
+  name        = "home-assistant-archive"
+  path        = "/homelab/"
+  description = "Kopierrechte des HA-Monatsarchiv-CronJobs innerhalb des HA-Buckets"
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid      = "ListOwnBucket"
+        Effect   = "Allow"
+        Action   = ["s3:ListBucket"]
+        Resource = [aws_s3_bucket.home_assistant.arn]
+      },
+      {
+        Sid    = "CopyWithinOwnBucket"
+        Effect = "Allow"
+        Action = [
+          "s3:GetObject",
+          "s3:PutObject",
+        ]
+        Resource = ["${aws_s3_bucket.home_assistant.arn}/*"]
+      },
+    ]
+  })
+}
+
+resource "aws_iam_user_policy_attachment" "home_assistant_archive" {
+  user       = aws_iam_user.home_assistant_archive.name
+  policy_arn = aws_iam_policy.home_assistant_archive.arn
 }
