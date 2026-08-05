@@ -1,28 +1,84 @@
-# Die beiden Offsite-Backup-Buckets. Sie sind bewusst NICHT als aws_s3_bucket
-# importiert: es sind die einzigen Kopien von Paperless- und HA-Daten ausserhalb
-# des Hauses, und ein importierter Bucket ist per "terraform destroy" oder einem
-# geloeschten Resource-Block zerstoerbar. Verwaltet wird hier nur, was diese
-# Runde aendern soll, also Versioning und Lifecycle. Public-Access-Block,
-# Verschluesselung und Ownership bleiben so, wie sie am Bucket stehen.
+# Die beiden Bestandsbuckets fuer Paperless und Home Assistant. Sie wurden am
+# 2026-08-05 in Terraform importiert und sind seitdem vollstaendig hier
+# beschrieben, genauso wie der Teslamate-Bucket.
 #
-# Die data-Quellen existieren nur, damit ein falsch geschriebener Bucket-Name
-# beim plan auffliegt statt beim apply.
+# Warum sie vorher nur als data-Quelle drinstanden und was daran falsch war:
+# die Sorge war, ein importierter Bucket sei per "terraform destroy" oder einem
+# geloeschten Resource-Block zerstoerbar. Das stimmt so nicht. "force_destroy"
+# steht auf dem Default false, und dann weigert sich S3 selbst, einen befuellten
+# Bucket zu loeschen: der Aufruf laeuft in BucketNotEmpty. Der eigentliche
+# Schutz sitzt also an der API und nicht an der Frage, ob Terraform den Bucket
+# kennt. prevent_destroy kommt obendrauf und faengt den Fall schon im plan ab.
+#
+# Der Preis des alten Zustands war dagegen real: Public-Access-Block,
+# Verschluesselung und Ownership waren reiner Konsolen-Zustand. Verstellt die
+# jemand, faellt das nirgends auf, kein plan meldet Drift. Genau diese drei
+# Einstellungen halten die Buckets privat.
+#
+# Der Import hat NICHTS an den Buckets geaendert (Werte vorab gegen die API
+# geprueft), einzige Ausnahme sind die Tags weiter unten, die es vorher nicht gab.
 
-data "aws_s3_bucket" "paperless" {
+resource "aws_s3_bucket" "paperless" {
   bucket = var.paperless_bucket
+
+  lifecycle {
+    prevent_destroy = true
+  }
+
+  tags = {
+    Name      = "paperless-offsite-backup"
+    ManagedBy = "terraform"
+  }
 }
 
-data "aws_s3_bucket" "home_assistant" {
+resource "aws_s3_bucket" "home_assistant" {
   bucket = var.home_assistant_bucket
+
+  lifecycle {
+    prevent_destroy = true
+  }
+
+  tags = {
+    Name      = "home-assistant-offsite-backup"
+    ManagedBy = "terraform"
+  }
 }
 
 # ===========================================
 # paperless-ngx
 # ===========================================
 
+resource "aws_s3_bucket_public_access_block" "paperless" {
+  bucket = aws_s3_bucket.paperless.id
+
+  block_public_acls       = true
+  block_public_policy     = true
+  ignore_public_acls      = true
+  restrict_public_buckets = true
+}
+
+resource "aws_s3_bucket_ownership_controls" "paperless" {
+  bucket = aws_s3_bucket.paperless.id
+
+  rule {
+    object_ownership = "BucketOwnerEnforced"
+  }
+}
+
+resource "aws_s3_bucket_server_side_encryption_configuration" "paperless" {
+  bucket = aws_s3_bucket.paperless.id
+
+  rule {
+    apply_server_side_encryption_by_default {
+      sse_algorithm = "AES256"
+    }
+    bucket_key_enabled = true
+  }
+}
+
 # Versioning ist an diesem Bucket seit jeher aktiv und wird hier nur festgehalten.
 resource "aws_s3_bucket_versioning" "paperless" {
-  bucket = data.aws_s3_bucket.paperless.id
+  bucket = aws_s3_bucket.paperless.id
 
   versioning_configuration {
     status = "Enabled"
@@ -40,7 +96,7 @@ resource "aws_s3_bucket_versioning" "paperless" {
 # ist, zementiert nur den Ist-Zustand. Erst das Konzept (append-only / Spiegel /
 # datierte Zips) entscheiden, dann hier nachziehen.
 resource "aws_s3_bucket_lifecycle_configuration" "paperless" {
-  bucket = data.aws_s3_bucket.paperless.id
+  bucket = aws_s3_bucket.paperless.id
 
   rule {
     id     = "abort-incomplete-multipart-uploads"
@@ -58,8 +114,37 @@ resource "aws_s3_bucket_lifecycle_configuration" "paperless" {
 # Home Assistant
 # ===========================================
 
+resource "aws_s3_bucket_public_access_block" "home_assistant" {
+  bucket = aws_s3_bucket.home_assistant.id
+
+  block_public_acls       = true
+  block_public_policy     = true
+  ignore_public_acls      = true
+  restrict_public_buckets = true
+}
+
+resource "aws_s3_bucket_ownership_controls" "home_assistant" {
+  bucket = aws_s3_bucket.home_assistant.id
+
+  rule {
+    object_ownership = "BucketOwnerEnforced"
+  }
+}
+
+resource "aws_s3_bucket_server_side_encryption_configuration" "home_assistant" {
+  bucket = aws_s3_bucket.home_assistant.id
+
+  rule {
+    apply_server_side_encryption_by_default {
+      sse_algorithm = "AES256"
+    }
+    bucket_key_enabled = true
+  }
+}
+
 # Dieser Bucket ist BEWUSST unversioniert, und die Tiefe steht BEWUSST nicht
 # hier, sondern in HAs eigener Retention ("behalte N automatische Backups").
+# Es gibt deshalb absichtlich KEINE aws_s3_bucket_versioning-Ressource fuer ihn.
 #
 # Warum keine NoncurrentVersionExpiration als Tiefe: HA zaehlt Kopien, Lifecycle
 # zaehlt Tage seit dem Loeschen. Zwei Mechanismen fuer dieselbe Aussage driften
@@ -69,19 +154,25 @@ resource "aws_s3_bucket_lifecycle_configuration" "paperless" {
 # Warum ueberhaupt kein Versioning: sein einziger Nutzen jenseits von Retention
 # ist der Schutz gegen ein Loeschen, das HA nicht gewollt hat. Der greift nur,
 # wenn der loeschende Key kein DeleteObjectVersion hat. Aktuell bedienen
-# Paperless, HA und das tote raspi5-Skript denselben IAM-Key, und dessen Rechte
-# sind ungeprueft (Roadmap Punkt 7, der terraform-homelab-Key kommt nicht an IAM).
-# Versioning waere hier also ein Sicherheits-Anstrich ohne Sicherheit.
+# Paperless und HA denselben IAM-Key "homelab-backup", und der darf
+# DeleteObject auf beiden Buckets. Versioning waere hier also ein
+# Sicherheits-Anstrich ohne Sicherheit.
+#
+# NACHTRAG 2026-08-05: die zweite Haelfte der alten Begruendung ("Rechte
+# ungeprueft") ist erledigt, die Policy ist auditiert und steht im Wortlaut in
+# betrieb.md. DeleteObjectVersion fehlt ihr, DeleteObject nicht. Es bleibt also
+# beim selben Ergebnis, nur aus belegtem statt aus unbekanntem Grund.
 #
 # Es kommt zurueck, wenn der Key pro Konsument getrennt und bucket-scoped ohne
-# DeleteObjectVersion ausgestellt ist. Dann als Ransomware-Schutz mit kleinem
-# Fenster, ausdruecklich nicht als Retention. Achtung: Versioning wirkt nicht
+# Delete-Rechte ausgestellt ist (Roadmap Punkt 4, Vorlage in
+# iam-backup-consumers.tf). Dann als Ransomware-Schutz mit kleinem Fenster,
+# ausdruecklich nicht als Retention. Achtung: Versioning wirkt nicht
 # rueckwirkend, geschuetzt ist erst, was danach geschrieben wird.
 #
 # Der weit zurueckliegende Wiederherstellungspunkt kommt stattdessen aus dem
 # Monatsarchiv unten.
 resource "aws_s3_bucket_lifecycle_configuration" "home_assistant" {
-  bucket = data.aws_s3_bucket.home_assistant.id
+  bucket = aws_s3_bucket.home_assistant.id
 
   rule {
     id     = "abort-incomplete-multipart-uploads"
