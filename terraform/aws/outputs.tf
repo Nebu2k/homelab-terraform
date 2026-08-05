@@ -27,5 +27,6 @@ output "backup_consumer_users" {
     (aws_iam_user.paperless_backup.name)       = "Secret s3-backup-credentials, Namespace paperless-ngx"
     (aws_iam_user.home_assistant_backup.name)  = "HA-UI, S3-Integration (nicht im Repo, liegt auf dem Longhorn-Volume)"
     (aws_iam_user.home_assistant_archive.name) = "Secret s3-archive-credentials, Namespace home-assistant"
+    (aws_iam_user.backup_monitor.name)         = "Secret s3-backup-monitor-credentials, Namespace monitoring"
   }
 }

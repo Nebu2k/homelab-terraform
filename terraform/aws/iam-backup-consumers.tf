@@ -314,3 +314,69 @@ resource "aws_iam_user_policy_attachment" "home_assistant_archive" {
   user       = aws_iam_user.home_assistant_archive.name
   policy_arn = aws_iam_policy.home_assistant_archive.arn
 }
+
+# ===========================================
+# Frische-Sonde ueber alle drei Buckets
+# ===========================================
+
+# Konsument ist der CronJob "offsite-backup-freshness"
+# (kubernetes-homelab/manifests/backup-monitor/), Secret
+# "s3-backup-monitor-credentials" im Namespace monitoring.
+#
+# Er beantwortet die eine Frage, die die Job-Alerts NICHT beantworten koennen:
+# ist im Bucket wirklich etwas angekommen. Ein erfolgreicher CronJob beweist das
+# nicht. Bei paperless klafft die Luecke am weitesten, weil der Upload im
+# Sidecar auf eigenem Timer laeuft und ein Fehlschlag dort nur eine Zeile ins
+# Log schreibt, und bei HA gibt es ueberhaupt keinen Job, den man beobachten
+# koennte.
+#
+# Deshalb hat dieser User als einziger Zugriff auf ALLE drei Buckets, und
+# deshalb darf er als einziger gar nichts damit tun ausser sie aufzulisten.
+resource "aws_iam_user" "backup_monitor" {
+  name = "homelab-backup-monitor"
+
+  tags = {
+    Name      = "offsite-backup-freshness-probe"
+    ManagedBy = "terraform"
+  }
+}
+
+# NUR s3:ListBucket, und das reicht exakt aus: list-objects-v2 liefert Key,
+# LastModified und Size je Objekt, und mehr braucht die Sonde nicht. Kein
+# GetObject, der Inhalt der Backups geht sie nichts an. Ein geleakter Key
+# verraet damit hoechstens Dateinamen und Zeitstempel, und die Dateinamen des
+# paperless-Exports tragen Titel und Korrespondent.
+#
+# Das ist der Grund fuer den eigenen User statt eines Rechts an einem
+# bestehenden: kein Konsument darf in die Buckets der anderen sehen, und die
+# Sonde muss in alle drei sehen. Genau eine Richtung dieser Kreuzung ist
+# harmlos, naemlich diese.
+resource "aws_iam_policy" "backup_monitor" {
+  name        = "backup-monitor"
+  path        = "/homelab/"
+  description = "Nur-Listing ueber alle drei Backup-Buckets fuer die Frische-Sonde"
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid    = "ListAllBackupBuckets"
+        Effect = "Allow"
+        Action = ["s3:ListBucket"]
+        # Nackte Bucket-ARNs, kein "/*": ListBucket ist eine Aktion auf dem
+        # Bucket. Mit "/*" liefe sie still ins Leere und die Sonde bekaeme
+        # AccessDenied, obwohl die Policy vorhanden aussieht.
+        Resource = [
+          aws_s3_bucket.paperless.arn,
+          aws_s3_bucket.home_assistant.arn,
+          aws_s3_bucket.teslamate.arn,
+        ]
+      },
+    ]
+  })
+}
+
+resource "aws_iam_user_policy_attachment" "backup_monitor" {
+  user       = aws_iam_user.backup_monitor.name
+  policy_arn = aws_iam_policy.backup_monitor.arn
+}
