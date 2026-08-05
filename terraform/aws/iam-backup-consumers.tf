@@ -338,16 +338,25 @@ resource "aws_iam_user" "etcd_backup" {
   }
 }
 
-# Kein DeleteObject und kein DeleteObjectVersion, wie bei allen ausser HA. Das
-# ist hier eine echte Entscheidung und keine Uebernahme des Musters, denn k3s
-# WUERDE loeschen wollen: "--etcd-s3-retention" raeumt alte Snapshots selbst aus
-# dem Bucket. Der Wert in der Unit ist deshalb unerreichbar hoch gesetzt
-# (var.etcd_s3_retention), aufgeraeumt wird ausschliesslich per Lifecycle.
+# Der zweite Konsument mit DeleteObject, nach Home Assistant, und aus demselben
+# Grund: k3s fuehrt seine Snapshot-Retention selbst und raeumt aeltere Staende
+# aus dem Bucket.
 #
-# Der Gewinn ist derselbe wie ueberall sonst: ein kompromittierter Cluster kann
-# ueber diesen Key keinen einzigen Snapshot entfernen. Er waere hier besonders
-# teuer, weil dieser Bucket der einzige Ort ausserhalb des Clusters ist, an dem
-# die Sealing-Keys liegen.
+# Erst war geplant, ihm das Loeschen zu verwehren und die Tiefe rein ueber
+# Lifecycle zu machen. Das geht hier NICHT, und der Grund ist eine Eigenheit von
+# --etcd-s3-config-secret: das Secret kennt keinen Retention-Schluessel, und
+# sobald ein weiteres --etcd-s3-*-Flag an der Unit steht, ignoriert k3s das
+# Secret vollstaendig und will die Zugangsdaten wieder im Klartext als Flags.
+# Die S3-Tiefe haengt damit an --etcd-snapshot-retention, und das gilt zugleich
+# lokal. Ein unerreichbar hoher Wert haette die Node-Platten volllaufen lassen,
+# der Engpass ist cp-1 mit 30 GB.
+#
+# Was den Verzicht traegt: DeleteObjectVersion fehlt, und der Bucket ist
+# versioniert. k3s' Loeschen setzt damit nur einen Delete-Marker, der Snapshot
+# liegt als noncurrent version darunter weiter und ueberlebt
+# etcd_snapshot_noncurrent_days. Ein kompromittierter Cluster kann die Staende
+# also unsichtbar machen, aber nicht vernichten. Das ist exakt die Bedingung,
+# unter der Versioning am HA-Bucket ueberhaupt etwas taugt.
 #
 # GetObject ist drin, obwohl der Schreibpfad es nicht braucht. k3s listet und
 # liest beim Start seine S3-Snapshots, um die ConfigMap k3s-etcd-snapshots zu
@@ -377,7 +386,11 @@ resource "aws_iam_policy" "etcd_backup" {
         Action = [
           "s3:PutObject",
           "s3:GetObject",
-          # Ein Snapshot liegt bei rund 48 MB und geht als Multipart hoch.
+          # Fuer k3s' eigene Retention, siehe oben. KEIN DeleteObjectVersion,
+          # das ist die Bedingung, unter der das vertretbar ist.
+          "s3:DeleteObject",
+          # Ein Snapshot liegt nach dem Defrag bei rund 16 MB und geht als
+          # Multipart hoch.
           "s3:AbortMultipartUpload",
         ]
         Resource = ["${aws_s3_bucket.etcd_snapshots.arn}/*"]

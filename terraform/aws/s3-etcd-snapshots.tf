@@ -77,14 +77,18 @@ resource "aws_s3_bucket_server_side_encryption_configuration" "etcd_snapshots" {
   }
 }
 
-# Versioning AN, aus demselben Grund wie beim Teslamate-Bucket: der schreibende
-# Key (homelab-etcd-backup) hat weder DeleteObject noch DeleteObjectVersion.
-# Damit bleibt einem kompromittierten Cluster nur das Ueberschreiben, und genau
-# dagegen wirkt Versioning.
+# Versioning AN, und hier traegt es mehr als an den anderen Buckets, weil dieser
+# Key als einer von zweien DeleteObject hat (Begruendung in
+# iam-backup-consumers.tf: k3s fuehrt seine Retention selbst und die S3-Tiefe
+# laesst sich nicht davon trennen).
 #
-# Die Snapshot-Keys tragen einen Unix-Zeitstempel und wiederholen sich im
-# Normalbetrieb nie. Ein Ueberschreiben waere also immer Absicht, und zwar
-# fremde.
+# Ihm fehlt DeleteObjectVersion. Jedes Loeschen, ob von k3s oder von jemandem
+# mit dem Key in der Hand, setzt damit nur einen Delete-Marker. Der Snapshot
+# liegt als noncurrent version darunter und ueberlebt
+# etcd_snapshot_noncurrent_days. Ohne Versioning waere dieser Bucket der einzige
+# Offsite-Ort der Sealing-Keys UND per Key ausraeumbar.
+#
+# ACHTUNG: Versioning wirkt nicht rueckwirkend. Es stand von Anfang an an.
 resource "aws_s3_bucket_versioning" "etcd_snapshots" {
   bucket = aws_s3_bucket.etcd_snapshots.id
 
@@ -97,20 +101,23 @@ resource "aws_s3_bucket_versioning" "etcd_snapshots" {
   }
 }
 
-# Aufgeraeumt wird ausschliesslich hier, NICHT durch k3s.
+# Aufgeraeumt wird hier ZWEIMAL, und das ist Absicht.
 #
-# k3s hat mit "--etcd-s3-retention" eine eigene Retention, die alte Snapshots
-# aus dem Bucket loescht. Die ist bewusst auf einen Wert gesetzt, den der Bucket
-# nie erreicht (siehe etcd_s3_retention in variables.tf), damit der IAM-User
-# ohne DeleteObject auskommt. Bei 2 Snapshots taeglich auf 3 Nodes und
-# etcd_snapshot_days Aufbewahrung pendelt sich der Bucket bei rund 180 Objekten
-# ein, k3s kommt also nie in die Naehe seiner Schwelle und versucht nie zu
-# loeschen.
+# Erstens raeumt k3s selbst: --etcd-snapshot-retention (28, also 14 Tage bei zwei
+# Laeufen taeglich) gilt lokal und in S3. Das ist der Normalbetrieb.
+#
+# Zweitens raeumen diese Regeln, und sie sind kein Zierrat, sondern fangen genau
+# die Faelle, in denen k3s es nicht tut: eine Node, die dauerhaft weg ist und
+# ihre Snapshots nie wieder anfasst, ein Fehlschlag beim Loeschen, oder die
+# noncurrent versions, die k3s' Delete-Marker hinterlaesst und die es selbst
+# gar nicht sehen kann.
 #
 # Der Bucket gehoert ausschliesslich diesem einen Zweck, deshalb greifen die
 # Regeln ohne Praefix-Filter. Es gibt hier bewusst kein "--etcd-s3-folder": eine
 # Praefix-Kopplung zwischen Node-Flag und Lifecycle-Regel waere eine weitere
-# Stelle, die beim Auseinanderlaufen still die Aufraeumung abschaltet.
+# Stelle, die beim Auseinanderlaufen still die Aufraeumung abschaltet. Und
+# ohnehin waere jedes weitere --etcd-s3-*-Flag an der Unit fatal, es schaltet
+# das Config-Secret ab.
 resource "aws_s3_bucket_lifecycle_configuration" "etcd_snapshots" {
   bucket = aws_s3_bucket.etcd_snapshots.id
 

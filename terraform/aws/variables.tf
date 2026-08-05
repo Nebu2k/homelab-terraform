@@ -75,23 +75,26 @@ variable "etcd_snapshot_noncurrent_days" {
   default     = 30
 }
 
-# k3s hat mit "--etcd-s3-retention" eine eigene Retention und loescht darueber
-# hinausgehende Snapshots selbst aus dem Bucket. Das soll es hier NICHT tun,
-# aufgeraeumt wird per Lifecycle, damit der IAM-User ohne DeleteObject auskommt.
+# Wie tief k3s seine Snapshots haelt, lokal UND in S3. Der Wert gehoert in die
+# k3s.service jeder Server-Node, er steuert nichts an der AWS-Seite und steht
+# hier, weil er mit den Lifecycle-Regeln zusammen gedacht werden muss.
 #
-# Der Wert ist deshalb bewusst unerreichbar hoch gewaehlt: 3 Server-Nodes mal 2
-# Snapshots taeglich mal etcd_snapshot_days sind rund 180 Objekte, und mehr
-# werden es nie, weil die Lifecycle-Regel am anderen Ende abraeumt. k3s kommt
-# nie an seine Schwelle und versucht nie zu loeschen.
+# WARUM NICHT "--etcd-s3-retention": das Secret aus --etcd-s3-config-secret
+# kennt diesen Schluessel nicht, und sobald IRGENDEIN weiteres --etcd-s3-*-Flag
+# an der Unit steht, ignoriert k3s das Secret komplett und will die Zugangsdaten
+# wieder als Flags sehen. Steuerbar bleibt die S3-Tiefe deshalb nur ueber
+# --etcd-snapshot-retention, das k3s auf --etcd-s3-retention durchreicht, wenn
+# dieses nicht gesetzt ist.
 #
-# Diese Variable steuert NICHTS an der AWS-Seite. Sie steht hier, weil der Wert
-# in die k3s-Unit auf allen drei Nodes gehoert und die Begruendung dafuer an
-# derselben Stelle stehen soll wie die Lifecycle-Regel, gegen die sie sich
-# richtet. Wer sie senkt, muss dem User DeleteObject geben.
-variable "etcd_s3_retention" {
-  description = "Wert fuer --etcd-s3-retention in der k3s-Unit, absichtlich unerreichbar hoch"
+# Der Preis: derselbe Wert gilt fuer die lokalen Snapshots auf der Node. 28 sind
+# bei zwei Laeufen taeglich 14 Tage. Nach dem Defrag liegt ein Snapshot bei rund
+# 16 MB, macht 450 MB je Node. Der Engpass ist k3s-cp-1 mit 30 GB Platte, die
+# Raspis haben 117 bzw. 917 GB. Wer den Wert deutlich erhoeht, schaut vorher auf
+# cp-1.
+variable "etcd_snapshot_retention" {
+  description = "Wert fuer --etcd-snapshot-retention in der k3s-Unit, gilt lokal und in S3"
   type        = number
-  default     = 1000
+  default     = 28
 }
 
 variable "multipart_abort_days" {

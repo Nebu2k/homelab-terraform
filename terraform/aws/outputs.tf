@@ -15,22 +15,25 @@ output "backup_buckets" {
     }
     (var.etcd_snapshots_bucket) = {
       versioning = aws_s3_bucket_versioning.etcd_snapshots.versioning_configuration[0].status
-      retention  = "${var.etcd_snapshot_days} Tage, noncurrent ${var.etcd_snapshot_noncurrent_days} Tage, k3s raeumt nicht mit (--etcd-s3-retention ${var.etcd_s3_retention})"
+      retention  = "k3s haelt ${var.etcd_snapshot_retention} Staende je Node, Lifecycle deckelt bei ${var.etcd_snapshot_days} Tagen, noncurrent ${var.etcd_snapshot_noncurrent_days} Tage"
     }
   }
 }
 
-# Die zwei Flags, die in die k3s.service JEDER Server-Node gehoeren. Sie stehen
-# hier, weil sie aus diesem Stack abgeleitet sind, aber nur auf den Nodes
-# wirken: die Unit-Dateien liegen nicht im Repo. Aendert sich der Bucket-Name
-# oder die Retention hier, muessen alle drei Nodes einzeln nachgezogen werden,
-# und zwar mit Quorum-Check.
+# Die Flags, die in die k3s.service JEDER Server-Node gehoeren. Sie stehen hier,
+# weil sie aus diesem Stack abgeleitet sind, aber nur auf den Nodes wirken: die
+# Unit-Dateien liegen nicht im Repo. Aendert sich hier etwas, muessen alle drei
+# Nodes einzeln nachgezogen werden, und zwar mit Quorum-Check.
+#
+# NICHTS weiter mit --etcd-s3- davor dazusetzen. Ein einziges weiteres
+# --etcd-s3-*-Flag laesst k3s das Config-Secret ignorieren, und dann sucht es
+# die Zugangsdaten wieder als Klartext-Flags in der Unit.
 output "k3s_etcd_s3_flags" {
   description = "Flags fuer die k3s.service auf cp-1, raspi4 und raspi5"
   value = {
-    flags  = "--etcd-s3 --etcd-s3-config-secret=k3s-etcd-s3-config"
-    secret = "k3s-etcd-s3-config, Namespace kube-system (SealedSecret in kubernetes-homelab/manifests/sealed-secrets/)"
-    inhalt = "bucket=${var.etcd_snapshots_bucket}, region=${var.aws_region}, retention=${var.etcd_s3_retention}"
+    flags  = "--etcd-s3 --etcd-s3-config-secret=k3s-etcd-s3-config --etcd-snapshot-retention=${var.etcd_snapshot_retention}"
+    secret = "k3s-etcd-s3-config, Namespace kube-system (SealedSecret in kubernetes-homelab/manifests/etcd-s3-config/)"
+    inhalt = "etcd-s3-bucket=${var.etcd_snapshots_bucket}, etcd-s3-region=${var.aws_region}, etcd-s3-access-key, etcd-s3-secret-key"
   }
 }
 
