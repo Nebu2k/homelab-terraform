@@ -2,16 +2,16 @@
 #
 # ================== Ausgangslage, gemessen am 2026-08-05 ==================
 #
-# Bis hierher bedienen Paperless, Home Assistant und der HA-Archiv-CronJob EINEN
-# gemeinsamen User "homelab-backup" (Key AKIARECCIKPIYMCUEK54, angelegt am
-# 2025-11-06, nie rotiert). Dessen Policy "homelab-backup-policy" v6 gewaehrt in
-# einem einzigen Statement PutObject, GetObject, DeleteObject und ListBucket auf
-# beide Buckets. Zwei Befunde daraus, die hier direkt einfliessen:
+# Bis hierher bedienten Paperless, Home Assistant und der HA-Archiv-CronJob
+# EINEN gemeinsamen User "homelab-backup", angelegt 2025-11-06 und nie rotiert.
+# Dessen Policy "homelab-backup-policy" v6 gewaehrte in einem einzigen Statement
+# PutObject, GetObject, DeleteObject und ListBucket auf beide Buckets. Zwei
+# Befunde daraus, die hier direkt einfliessen:
 #
-# 1. DeleteObjectVersion ist NICHT enthalten. Versioning traegt in diesem Account
+# 1. DeleteObjectVersion war NICHT enthalten. Versioning traegt in diesem Account
 #    also wirklich gegen einen kompromittierten Cluster und ist kein Anstrich.
 #    Deshalb steht es am Teslamate-Bucket an.
-# 2. Die Resource-Liste enthaelt "arn:aws:s3:::homelab-homeassistent-elmstreet79*"
+# 2. Die Resource-Liste enthielt "arn:aws:s3:::homelab-homeassistent-elmstreet79*"
 #    mit angehaengtem Stern statt "/*". Das trifft die Objekte zwar mit, aber
 #    eben auch jeden anderen Bucket, dessen Name so beginnt. Bucket-Namen sind
 #    global eindeutig und von jedem registrierbar. Hier deshalb konsequent die

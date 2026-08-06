@@ -18,7 +18,7 @@ provider "aws" {
   # Legt man in der Konsole einen Access Key an, fragt AWS nach einer
   # "Description". Die landet nicht am Key, sondern als TAG AM IAM-USER, und
   # zwar mit der Key-ID als Tag-Namen (belegt am 2026-08-05 an
-  # homelab-teslamate-backup: Tag "AKIARECCIKPI2OHRJTUK").
+  # homelab-teslamate-backup, Tag "AKIA...").
   #
   # Da Terraform die User-Tags verwaltet, sieht es diesen Fremdkoerper als Drift
   # und wuerde ihn beim naechsten apply wieder loeschen. Damit waere die einzige
