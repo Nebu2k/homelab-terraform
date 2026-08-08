@@ -21,8 +21,8 @@
 #   vm_disk_ssd  = true
 
 #   # Storage
-#   vm_storage         = "longhorn-storage"
-#   cloud_init_storage = "longhorn-storage"
+#   vm_storage         = "nvme-2tb"
+#   cloud_init_storage = "nvme-2tb"
 
 #   # Network
 #   vm_network_bridge = "vmbr0"

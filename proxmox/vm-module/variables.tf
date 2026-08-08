@@ -73,13 +73,13 @@ variable "vm_disk_ssd" {
 variable "vm_storage" {
   description = "Storage pool for VM disk"
   type        = string
-  default     = "longhorn-storage"
+  default     = "nvme-2tb"
 }
 
 variable "cloud_init_storage" {
   description = "Storage pool for cloud-init disk"
   type        = string
-  default     = "longhorn-storage"
+  default     = "nvme-2tb"
 }
 
 # Network Configuration

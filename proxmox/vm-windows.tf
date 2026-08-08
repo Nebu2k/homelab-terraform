@@ -38,7 +38,7 @@
 
 #   # EFI-Disk (Pflicht bei OVMF)
 #   efi_disk {
-#     datastore_id      = "longhorn-storage"
+#     datastore_id      = "nvme-2tb"
 #     file_format       = "raw"
 #     type              = "4m"
 #     pre_enrolled_keys = true
@@ -46,13 +46,13 @@
 
 #   # TPM v2.0 (Pflicht bei Win11)
 #   tpm_state {
-#     datastore_id = "longhorn-storage"
+#     datastore_id = "nvme-2tb"
 #     version      = "v2.0"
 #   }
 
 #   # System-Disk (SATA → keine Treiber im Setup nötig)
 #   disk {
-#     datastore_id = "longhorn-storage"
+#     datastore_id = "nvme-2tb"
 #     interface    = "sata0"
 #     size         = 100
 #     file_format  = "raw"

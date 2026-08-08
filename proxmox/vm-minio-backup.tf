@@ -8,7 +8,7 @@
 # weiter, damit der alte Backup-Bestand erreichbar blieb, solange die
 # NAS-Sicherung noch unbewiesen war. Der Bestand auf dem NAS ist inzwischen
 # mehrere Tage tief und durchgaengig "Completed", die VM ist deshalb per apply
-# zerstoert und gibt 500 GB auf longhorn-storage frei.
+# zerstoert und gibt 500 GB auf nvme-2tb frei.
 #
 # Der Block bleibt auskommentiert stehen, statt geloescht zu werden: als Vorlage,
 # falls je wieder ein S3-Ziel gebraucht wird. Auskommentiert ist fuer Terraform
@@ -46,8 +46,8 @@
 #   vm_disk_ssd  = true
 #
 #   # Storage
-#   vm_storage         = "longhorn-storage"
-#   cloud_init_storage = "longhorn-storage"
+#   vm_storage         = "nvme-2tb"
+#   cloud_init_storage = "nvme-2tb"
 #
 #   # Network
 #   vm_network_bridge = "vmbr0"
