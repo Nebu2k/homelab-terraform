@@ -17,9 +17,27 @@ locals {
   # der MetalLB-Pool des neuen Clusters (.240-.247) stehen NICHT hier, die
   # verwaltet Talos selbst bzw. MetalLB im Cluster.
   talos_nodes = {
-    "talos-cp-1" = { vm_id = 110, ip = "192.168.2.20" }
-    "talos-cp-2" = { vm_id = 111, ip = "192.168.2.21" }
-    "talos-cp-3" = { vm_id = 112, ip = "192.168.2.22" }
+    # usb_devices: Vendor/Product-IDs, die dieser VM durchgereicht werden.
+    #
+    # talos-cp-1 traegt den RTL-SDR (0bda:2838, RTL2838 DVB-T). Der Stick steckt
+    # seit dem 2026-08-08 an pve statt an raspi5, readsb laeuft als Pod im
+    # Cluster und ist per nodeSelector an genau diese Node gebunden.
+    #
+    # Bindung ueber Vendor/Product und nicht ueber den Portpfad: es ist nur ein
+    # Stick im Spiel, und qemu findet ihn so nach einem Reset von selbst wieder.
+    # Ein Portpfad waere nach dem naechsten Umstecken falsch.
+    #
+    # Diese Node ist damit ein Pet. Sie ist deshalb die, die Schritt 7 der
+    # Migration ueberlebt: von den drei Start-VMs wird eine geloescht, das ist
+    # nicht diese. Wandert der Stick doch woanders hin, aendert sich hier die
+    # Zeile und in kubernetes-homelab/manifests/readsb/deployment.yaml der
+    # nodeSelector.
+    #
+    # ACHTUNG: das Hinzufuegen oder Entfernen eines usb-Blocks stoppt und
+    # startet die VM. Nur bei gesundem etcd und nur an einer Node auf einmal.
+    "talos-cp-1" = { vm_id = 110, ip = "192.168.2.20", usb_devices = ["0bda:2838"] }
+    "talos-cp-2" = { vm_id = 111, ip = "192.168.2.21", usb_devices = [] }
+    "talos-cp-3" = { vm_id = 112, ip = "192.168.2.22", usb_devices = [] }
   }
 }
 
@@ -82,6 +100,15 @@ resource "proxmox_virtual_environment_vm" "talos" {
 
   network_device {
     bridge = var.talos_vm_network_bridge
+  }
+
+  # Leer fuer die Nodes ohne Hardware, siehe usb_devices in locals oben.
+  dynamic "usb" {
+    for_each = each.value.usb_devices
+    content {
+      host = usb.value
+      usb3 = false
+    }
   }
 
   operating_system {
