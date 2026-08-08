@@ -72,3 +72,57 @@ variable "pbs_root_password" {
   type        = string
   sensitive   = true
 }
+
+# ============================================
+# Talos Control Plane VMs
+# ============================================
+# Defaults statt tfvars-Eintraege: terraform.tfvars ist gitignored, ein Wert nur
+# dort waere fuer jeden anderen Klon des Repos verschwunden.
+
+variable "talos_version" {
+  description = "Talos version for the Image Factory download (must match kubernetes-homelab/talos/talconfig.yaml)"
+  type        = string
+  default     = "v1.13.8"
+}
+
+variable "talos_schematic_id" {
+  description = "Image Factory schematic ID: iscsi-tools, util-linux-tools, qemu-guest-agent"
+  type        = string
+  default     = "88d1f7a5c4f1d3aba7df787c448c1d3d008ed29cfb34af53fa0df4336a56040b"
+}
+
+variable "talos_vm_cpu_cores" {
+  description = "CPU cores per Talos control plane VM"
+  type        = number
+  default     = 4
+}
+
+variable "talos_vm_memory" {
+  description = "Memory in MB per Talos control plane VM"
+  type        = number
+  default     = 4096
+}
+
+variable "talos_vm_disk_size" {
+  description = "Disk size in GB per Talos control plane VM (holds etcd and Longhorn replicas)"
+  type        = number
+  default     = 128
+}
+
+variable "talos_vm_storage" {
+  description = "Storage pool for Talos VM disks"
+  type        = string
+  default     = "nvme-2tb"
+}
+
+variable "talos_image_storage" {
+  description = "Storage pool for the downloaded Talos image"
+  type        = string
+  default     = "local"
+}
+
+variable "talos_vm_network_bridge" {
+  description = "Network bridge for Talos VMs"
+  type        = string
+  default     = "vmbr0"
+}
