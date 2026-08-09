@@ -42,6 +42,79 @@ resource "helm_release" "argocd" {
   wait    = true
   timeout = 900
 
+  # resource.exclusions: ArgoCDs eingebaute Default-Liste, aber OHNE core/
+  # Endpoints. Gefunden am 2026-08-09 beim Umzug von external-services.
+  #
+  # Ab ArgoCD 3.0 stehen Endpoints und EndpointSlice per Default auf der
+  # Ausschlussliste. Ausgeschlossen heisst nicht "wird nicht angezeigt", sondern
+  # "existiert fuer ArgoCD nicht": die neun handgeschriebenen Endpoints-Objekte
+  # aus manifests/external-services/ werden nie angelegt, und die App meldet
+  # trotzdem Synced/Healthy. Sichtbar war das nur daran, dass Traefik fuer
+  # pve/unifi/plex 503 lieferte, weil hinter den selektorlosen Services nichts
+  # stand. Im k3s-Cluster faellt es nicht auf: dort stammen die Objekte aus der
+  # Zeit vor 3.0 und werden aus demselben Grund auch nicht geprunt.
+  #
+  # Nur core/Endpoints kommt zurueck, discovery.k8s.io/EndpointSlice bleibt
+  # draussen. Die Slices erzeugt der Mirroring-Controller selbst, sie gehoeren
+  # niemandem im Repo, und sie sind die Masse.
+  #
+  # Preis: die Liste ist damit auf den Stand von ArgoCD 3.5.0 eingefroren.
+  # Bei einem ArgoCD-Major pruefen, ob upstream neue Ausschluesse dazugekommen
+  # sind ("argocd admin settings resource-overrides list" bzw. das
+  # Default-argocd-cm der neuen Version), und hier nachziehen.
+  values = [<<-EOT
+    configs:
+      cm:
+        resource.exclusions: |
+          - apiGroups:
+            - discovery.k8s.io
+            kinds:
+            - EndpointSlice
+          - apiGroups:
+            - coordination.k8s.io
+            kinds:
+            - Lease
+          - apiGroups:
+            - authentication.k8s.io
+            - authorization.k8s.io
+            kinds:
+            - SelfSubjectReview
+            - TokenReview
+            - LocalSubjectAccessReview
+            - SelfSubjectAccessReview
+            - SelfSubjectRulesReview
+            - SubjectAccessReview
+          - apiGroups:
+            - certificates.k8s.io
+            kinds:
+            - CertificateSigningRequest
+          - apiGroups:
+            - cert-manager.io
+            kinds:
+            - CertificateRequest
+          - apiGroups:
+            - cilium.io
+            kinds:
+            - CiliumIdentity
+            - CiliumEndpoint
+            - CiliumEndpointSlice
+          - apiGroups:
+            - kyverno.io
+            - reports.kyverno.io
+            - wgpolicyk8s.io
+            kinds:
+            - PolicyReport
+            - ClusterPolicyReport
+            - EphemeralReport
+            - ClusterEphemeralReport
+            - AdmissionReport
+            - ClusterAdmissionReport
+            - BackgroundScanReport
+            - ClusterBackgroundScanReport
+            - UpdateRequest
+  EOT
+  ]
+
   # Derselbe vollstaendige Wertesatz wie im k3s-Cluster ("helm get values
   # argocd"). Bewusst explizit statt --reuse-values: bei einem Chart-Major
   # schlagen neue Defaults sonst nicht sauber durch.
