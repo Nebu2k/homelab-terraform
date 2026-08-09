@@ -74,7 +74,17 @@
   // zieht "terraform init -upgrade" beim naechsten Apply ohnehin mit, ein PR
   // dafuer waere Laerm.
   //
-  // Lock-Dateien gibt es nicht, .terraform.lock.hcl ist gitignored.
+  // Seit dem 2026-08-09 ist .terraform.lock.hcl committet, eine je Stack.
+  // Renovate wuerde sie beim Anheben eines Bereichs mitziehen wollen, dafuer
+  // braucht das Image ein terraform-Binary. Klappt das nicht, aendert der PR nur
+  // die .tf-Datei und die Lock-Datei bleibt auf der alten Version stehen: dann
+  // scheitert das naechste "terraform init" mit einer Meldung ueber die
+  // Lock-Datei und will ein "terraform init -upgrade". Das ist kein Schaden,
+  // sondern genau der Handgriff, der hier ohnehin vor jedem Apply steht.
+  //
+  // Die Lock-Dateien tragen nur darwin_arm64-Hashes. Ein PR, der sie auf einem
+  // Linux-Runner neu schreibt, wuerde die Plattform tauschen statt ergaenzen.
+  // Falls das je auffaellt: "terraform providers lock" mit beiden -platform.
   customManagers: [
     // Die argo-cd-Chart-Version steckt im default einer Variablen und ist damit
     // fuer den terraform-Manager unsichtbar; er kennt nur required_providers
