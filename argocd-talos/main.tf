@@ -134,22 +134,17 @@ resource "helm_release" "argocd" {
       name  = "configs.params.server\\.insecure"
       value = "true"
     },
-    # Nur in diesem Cluster noetig, das k3s-ArgoCD bekommt es NICHT.
+    # Hier stand bis zum 2026-08-09 ein "--load-restrictor LoadRestrictionsNone"
+    # in kustomize.buildOptions. Gebraucht wurde es nur waehrend der
+    # Parallelphase: clusters/talos/kustomization.yaml zog die
+    # Application-Manifeste aus ../../apps/, und Kustomize verbietet
+    # Datei-Referenzen oberhalb des Overlay-Verzeichnisses per Default.
     #
-    # clusters/talos/kustomization.yaml zieht die Application-Manifeste aus
-    # ../../apps/, damit es sie nicht ein zweites Mal geben muss. Kustomize
-    # verbietet Datei-Referenzen oberhalb des Overlay-Verzeichnisses per
-    # Default und bricht sonst mit "security; file is not in or below" ab.
-    # Verzeichnis-Bases waeren erlaubt, aber apps/ ist eine flache Liste aller
-    # 27 Applications und wir wollen genau vier davon.
-    #
-    # Der gelockerte Restrictor reicht nicht ueber das Repo hinaus, das ArgoCD
-    # ohnehin klont. Die Alternative waere ein zweiter Satz Applications, also
-    # Drift.
-    {
-      name  = "configs.cm.kustomize\\.buildOptions"
-      value = "--load-restrictor LoadRestrictionsNone"
-    },
+    # clusters/talos/ gibt es seit dem Abbau des k3s-Clusters nicht mehr, apps/
+    # ist die einzige Liste, und keine kustomization.yaml im Repo zeigt noch
+    # oberhalb ihres eigenen Verzeichnisses. Damit ist die Lockerung ersatzlos
+    # entfallen: sie stehen zu lassen hiesse, eine Sicherheitsgrenze fuer einen
+    # Grund offen zu halten, den es nicht mehr gibt.
   ]
 }
 
