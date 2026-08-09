@@ -3,11 +3,11 @@ output "backup_buckets" {
   value = {
     (var.paperless_bucket) = {
       versioning = aws_s3_bucket_versioning.paperless.versioning_configuration[0].status
-      retention  = "keine, bis das Paperless-Backup-Konzept entschieden ist"
+      retention  = "keine, nur Multipart-Abbruch nach ${var.multipart_abort_days} Tagen"
     }
     (var.home_assistant_bucket) = {
-      versioning = "Disabled, bewusst (siehe s3-backup-buckets.tf)"
-      retention  = "Tiefe steuert HA selbst, Monatsarchiv '${var.home_assistant_archive_prefix}*' ${var.home_assistant_archive_days} Tage"
+      versioning = "Disabled"
+      retention  = "Tiefe steuert Home Assistant selbst, Monatsarchiv '${var.home_assistant_archive_prefix}*' ${var.home_assistant_archive_days} Tage"
     }
     (var.teslamate_bucket) = {
       versioning = aws_s3_bucket_versioning.teslamate.versioning_configuration[0].status
@@ -15,32 +15,14 @@ output "backup_buckets" {
     }
     (var.etcd_snapshots_bucket) = {
       versioning = aws_s3_bucket_versioning.etcd_snapshots.versioning_configuration[0].status
-      retention  = "k3s haelt ${var.etcd_snapshot_retention} Staende je Node, Lifecycle deckelt bei ${var.etcd_snapshot_days} Tagen, noncurrent ${var.etcd_snapshot_noncurrent_days} Tage"
+      retention  = "Lifecycle ${var.etcd_snapshot_days} Tage, noncurrent ${var.etcd_snapshot_noncurrent_days} Tage"
     }
   }
 }
 
-# Die Flags, die in die k3s.service JEDER Server-Node gehoeren. Sie stehen hier,
-# weil sie aus diesem Stack abgeleitet sind, aber nur auf den Nodes wirken: die
-# Unit-Dateien liegen nicht im Repo. Aendert sich hier etwas, muessen alle drei
-# Nodes einzeln nachgezogen werden, und zwar mit Quorum-Check.
-#
-# NICHTS weiter mit --etcd-s3- davor dazusetzen. Ein einziges weiteres
-# --etcd-s3-*-Flag laesst k3s das Config-Secret ignorieren, und dann sucht es
-# die Zugangsdaten wieder als Klartext-Flags in der Unit.
-output "k3s_etcd_s3_flags" {
-  description = "Flags fuer die k3s.service auf cp-1, raspi4 und raspi5"
-  value = {
-    flags  = "--etcd-s3 --etcd-s3-config-secret=k3s-etcd-s3-config --etcd-snapshot-retention=${var.etcd_snapshot_retention}"
-    secret = "k3s-etcd-s3-config, Namespace kube-system (SealedSecret in kubernetes-homelab/manifests/etcd-s3-config/)"
-    inhalt = "etcd-s3-bucket=${var.etcd_snapshots_bucket}, etcd-s3-region=${var.aws_region}, etcd-s3-access-key, etcd-s3-secret-key"
-  }
-}
-
-# Der naechste Schritt nach dem apply ist ein Handgriff in der Konsole, deshalb
-# steht er hier und nicht nur in der Doku: Terraform legt bewusst keine
-# aws_iam_access_key an (Begruendung in iam-backup-consumers.tf), die Keys
-# entstehen einmal in der Konsole und kommen per kubeseal ins Cluster.
+# Terraform legt keine aws_iam_access_key an. Die Keys werden in der AWS-Konsole
+# erzeugt und per kubeseal ins Cluster gebracht; dieser Output haelt fest, wohin
+# der jeweilige Key gehoert.
 output "backup_consumer_users" {
   description = "IAM-User je Backup-Konsument und wohin ihr Access Key gehoert"
   value = {
@@ -49,6 +31,6 @@ output "backup_consumer_users" {
     (aws_iam_user.home_assistant_backup.name)  = "HA-UI, S3-Integration (nicht im Repo, liegt auf dem Longhorn-Volume)"
     (aws_iam_user.home_assistant_archive.name) = "Secret s3-archive-credentials, Namespace home-assistant"
     (aws_iam_user.backup_monitor.name)         = "Secret s3-backup-monitor-credentials, Namespace monitoring"
-    (aws_iam_user.etcd_backup.name)            = "Secret k3s-etcd-s3-config, Namespace kube-system (liest k3s selbst, nicht ein Pod)"
+    (aws_iam_user.etcd_backup.name)            = "Secret etcd-backup-s3, Namespace kube-system"
   }
 }

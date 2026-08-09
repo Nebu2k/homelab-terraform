@@ -1,22 +1,8 @@
-# Die beiden Bestandsbuckets fuer Paperless und Home Assistant. Sie wurden am
-# 2026-08-05 in Terraform importiert und sind seitdem vollstaendig hier
-# beschrieben, genauso wie der Teslamate-Bucket.
+# Die Buckets fuer paperless-ngx und Home Assistant.
 #
-# Warum sie vorher nur als data-Quelle drinstanden und was daran falsch war:
-# die Sorge war, ein importierter Bucket sei per "terraform destroy" oder einem
-# geloeschten Resource-Block zerstoerbar. Das stimmt so nicht. "force_destroy"
-# steht auf dem Default false, und dann weigert sich S3 selbst, einen befuellten
-# Bucket zu loeschen: der Aufruf laeuft in BucketNotEmpty. Der eigentliche
-# Schutz sitzt also an der API und nicht an der Frage, ob Terraform den Bucket
-# kennt. prevent_destroy kommt obendrauf und faengt den Fall schon im plan ab.
-#
-# Der Preis des alten Zustands war dagegen real: Public-Access-Block,
-# Verschluesselung und Ownership waren reiner Konsolen-Zustand. Verstellt die
-# jemand, faellt das nirgends auf, kein plan meldet Drift. Genau diese drei
-# Einstellungen halten die Buckets privat.
-#
-# Der Import hat NICHTS an den Buckets geaendert (Werte vorab gegen die API
-# geprueft), einzige Ausnahme sind die Tags weiter unten, die es vorher nicht gab.
+# Public-Access-Block, Verschluesselung und Ownership sind hier beschrieben und
+# nicht nur Konsolen-Zustand; eine Verstellung meldet der naechste plan als
+# Drift.
 
 resource "aws_s3_bucket" "paperless" {
   bucket = var.paperless_bucket
@@ -76,7 +62,6 @@ resource "aws_s3_bucket_server_side_encryption_configuration" "paperless" {
   }
 }
 
-# Versioning ist an diesem Bucket seit jeher aktiv und wird hier nur festgehalten.
 resource "aws_s3_bucket_versioning" "paperless" {
   bucket = aws_s3_bucket.paperless.id
 
@@ -89,12 +74,9 @@ resource "aws_s3_bucket_versioning" "paperless" {
   }
 }
 
-# BEWUSST nur der Multipart-Abbruch, keine Retention. Der Sidecar synct ohne
-# "--delete", der Bucket ist damit ein Archiv und kein Spiegel: rund 27 der 218
-# Objekte gehoeren zu keinem existierenden Dokument mehr (gemessen 2026-08-04).
-# Eine Expiration auf ein Ablageschema zu setzen, das selbst noch nicht rund
-# ist, zementiert nur den Ist-Zustand. Erst das Konzept (append-only / Spiegel /
-# datierte Zips) entscheiden, dann hier nachziehen.
+# Nur der Multipart-Abbruch, keine Retention. Der Sidecar synct ohne "--delete",
+# der Bucket ist damit ein Archiv und kein Spiegel: er enthaelt auch Staende, zu
+# denen kein Dokument mehr existiert.
 resource "aws_s3_bucket_lifecycle_configuration" "paperless" {
   bucket = aws_s3_bucket.paperless.id
 
@@ -142,35 +124,10 @@ resource "aws_s3_bucket_server_side_encryption_configuration" "home_assistant" {
   }
 }
 
-# Dieser Bucket ist BEWUSST unversioniert, und die Tiefe steht BEWUSST nicht
-# hier, sondern in HAs eigener Retention ("behalte N automatische Backups").
-# Es gibt deshalb absichtlich KEINE aws_s3_bucket_versioning-Ressource fuer ihn.
-#
-# Warum keine NoncurrentVersionExpiration als Tiefe: HA zaehlt Kopien, Lifecycle
-# zaehlt Tage seit dem Loeschen. Zwei Mechanismen fuer dieselbe Aussage driften
-# auseinander, sobald ein Backup-Lauf ausfaellt, und niemand weiss spaeter, welche
-# Zahl gewinnt. Wer mehr Staende will, dreht an HA, an einer Stelle.
-#
-# Warum ueberhaupt kein Versioning: sein einziger Nutzen jenseits von Retention
-# ist der Schutz gegen ein Loeschen, das HA nicht gewollt hat. Der greift nur,
-# wenn der loeschende Key kein DeleteObjectVersion hat. Aktuell bedienen
-# Paperless und HA denselben IAM-Key "homelab-backup", und der darf
-# DeleteObject auf beiden Buckets. Versioning waere hier also ein
-# Sicherheits-Anstrich ohne Sicherheit.
-#
-# NACHTRAG 2026-08-05: die zweite Haelfte der alten Begruendung ("Rechte
-# ungeprueft") ist erledigt, die Policy ist auditiert und steht im Wortlaut in
-# betrieb.md. DeleteObjectVersion fehlt ihr, DeleteObject nicht. Es bleibt also
-# beim selben Ergebnis, nur aus belegtem statt aus unbekanntem Grund.
-#
-# Es kommt zurueck, wenn der Key pro Konsument getrennt und bucket-scoped ohne
-# Delete-Rechte ausgestellt ist (Roadmap Punkt 4, Vorlage in
-# iam-backup-consumers.tf). Dann als Ransomware-Schutz mit kleinem Fenster,
-# ausdruecklich nicht als Retention. Achtung: Versioning wirkt nicht
-# rueckwirkend, geschuetzt ist erst, was danach geschrieben wird.
-#
-# Der weit zurueckliegende Wiederherstellungspunkt kommt stattdessen aus dem
-# Monatsarchiv unten.
+# Dieser Bucket ist unversioniert, es gibt fuer ihn keine
+# aws_s3_bucket_versioning-Ressource. Die Tiefe der automatischen Backups
+# steuert Home Assistant selbst ueber seine eigene Retention ("behalte N
+# automatische Backups"), nicht eine Regel hier.
 resource "aws_s3_bucket_lifecycle_configuration" "home_assistant" {
   bucket = aws_s3_bucket.home_assistant.id
 
@@ -186,32 +143,21 @@ resource "aws_s3_bucket_lifecycle_configuration" "home_assistant" {
   }
 
   # ---------------------------------------------------------------------------
-  # Monatsarchiv, der eigentliche Backup-des-Backups-Punkt.
+  # Monatsarchiv.
   #
   # Eine monatliche HA-Automation erzeugt ein MANUELLES Backup. HAs Retention
-  # ("behalte N") greift ausschliesslich auf automatische Backups, ein manuelles
-  # bleibt also liegen, bis es jemand loescht. Genau das uebernimmt diese Regel.
+  # greift ausschliesslich auf automatische Backups, ein manuelles bleibt
+  # liegen, bis es geloescht wird; das uebernimmt diese Regel. Die Staende
+  # landen als "<prefix>_<Datum>_<Zeit>_<ms>.tar" (+ .metadata.json) im
+  # Bucket-Root, getrennt von "Automatic_backup_".
   #
-  # Belegt am 2026-08-05: ein manuell mit dem Namen "Monthly" erstelltes Backup
-  # erreicht den S3-Agenten und landet als "Monthly_<Datum>_<Zeit>_<ms>.tar"
-  # (+ .metadata.json) im Bucket-Root, sauber getrennt von "Automatic_backup_".
+  # Lifecycle-Filter koennen nicht negieren, "alles ausser Automatic_" gibt es
+  # nicht. Die Regel haengt am literalen Praefix aus
+  # var.home_assistant_archive_prefix; passt es nicht mehr zum Backup-Namen aus
+  # der Automation, greift sie still nicht mehr.
   #
-  # ACHTUNG, die zwei Fallen an dieser Regel:
-  #
-  # 1. Lifecycle-Filter koennen NICHT negieren. "Alles ausser Automatic_" gibt es
-  #    nicht, die Regel haengt zwingend am literalen Praefix. Aendert jemand den
-  #    Backup-Namen in der Automation, greift sie still nicht mehr und die
-  #    Archivstaende wachsen unbegrenzt. Deshalb steht das Praefix in einer
-  #    Variablen und nicht als Literal hier.
-  # 2. Die 180 Tage sind bewusst kein Jahr. Ein HA-Backup altert schlecht, ein
-  #    Stand von vor zwoelf Versionen laesst sich nicht mehr zuverlaessig als
-  #    Ganzes zurueckspielen. Was nicht altert, ist der Griff einzelner Dateien
-  #    aus dem Tar (configuration.yaml, Automationen, .storage). Danach ist die
-  #    Aufbewahrung bemessen, nicht nach "moeglichst lange".
-  #
-  # Weil der Bucket unversioniert ist, loescht die Expiration direkt. Es entsteht
-  # kein Delete-Marker, es braucht also weder NoncurrentVersionExpiration noch
-  # ExpiredObjectDeleteMarker zum Nachraeumen.
+  # Der Bucket ist unversioniert, die Expiration loescht also direkt. Es
+  # entstehen keine Delete-Marker, die nachzuraeumen waeren.
   rule {
     id     = "expire-monthly-archive"
     status = "Enabled"

@@ -1,23 +1,16 @@
 # Offsite-Backup der Teslamate-Datenbank.
 #
-# Anders als die beiden Bestandsbuckets wird dieser hier vollstaendig von
-# Terraform angelegt, es gibt keinen Konsolen-Zustand daneben. Der Inhalt sind
-# in sich geschlossene "pg_dump -Fc"-Staende, erzeugt vom CronJob
-# kubernetes-homelab/manifests/teslamate/backup-cronjob.yaml.
-#
-# Warum datierte Dumps und kein Sync: ein Dump ist fuer sich wiederherstellbar,
-# es gibt keine Waisen, keinen Teilzustand und keine Frage "welche Datei gehoert
-# zu welchem Stand". Genau die Punkte, an denen das Paperless-Konzept haengt.
+# Inhalt sind in sich geschlossene "pg_dump -Fc"-Staende unter den Praefixen
+# "daily/" und "monthly/", erzeugt vom CronJob
+# kubernetes-homelab/manifests/teslamate/backup-cronjob.yaml. Ein Dump liegt bei
+# rund 60 MB.
 
 resource "aws_s3_bucket" "teslamate" {
   bucket = var.teslamate_bucket
 
-  # force_destroy bleibt aus (Default). Das ist hier die eigentliche
-  # Schutzschicht und nicht bloss Kosmetik: S3 weigert sich, einen befuellten
-  # Bucket zu loeschen, ein "terraform destroy" laeuft also in BucketNotEmpty
-  # statt die einzige Offsite-Kopie zu entfernen. prevent_destroy unten kommt
-  # obendrauf und faengt den Fall schon im plan ab.
-
+  # force_destroy steht auf dem Default false. S3 lehnt das Loeschen eines
+  # befuellten Buckets mit BucketNotEmpty ab, prevent_destroy faengt den Fall
+  # bereits im plan ab.
   lifecycle {
     prevent_destroy = true
   }
@@ -56,22 +49,10 @@ resource "aws_s3_bucket_server_side_encryption_configuration" "teslamate" {
   }
 }
 
-# Versioning ist hier bewusst AN, obwohl es am HA-Bucket bewusst AUS ist. Das
-# ist kein Widerspruch, die Bedingung aus s3-backup-buckets.tf ist hier von
-# Anfang an erfuellt:
-#
-# Versioning schuetzt nur dann wirklich, wenn der schreibende Key die alten
-# Versionen nicht selbst wegraeumen kann. Der Key dieses Buckets (siehe
-# iam-backup-consumers.tf) hat weder DeleteObject noch DeleteObjectVersion, er
-# darf ausschliesslich schreiben und lesen.
-#
-# Damit bleibt genau ein Angriff uebrig, den ein kompromittierter Cluster noch
-# faehrt: bestehende Keys mit Muell UEBERSCHREIBEN. Dagegen wirkt Versioning,
-# die echten Dumps liegen dann als noncurrent version darunter und ueberleben
-# teslamate_noncurrent_days.
-#
-# Und es ist ausdruecklich KEINE Retention: die Tiefe machen die Expiration-
-# Regeln unten, nicht die Versionen.
+# Versioning ist aktiv und deckt das Ueberschreiben bestehender Keys ab; die
+# vorherigen Dumps liegen dann als noncurrent version darunter und ueberleben
+# teslamate_noncurrent_days. Es ist keine Retention, die Tiefe machen die
+# Expiration-Regeln unten.
 resource "aws_s3_bucket_versioning" "teslamate" {
   bucket = aws_s3_bucket.teslamate.id
 
@@ -87,9 +68,9 @@ resource "aws_s3_bucket_versioning" "teslamate" {
 resource "aws_s3_bucket_lifecycle_configuration" "teslamate" {
   bucket = aws_s3_bucket.teslamate.id
 
-  # Der Dump liegt bei rund 60 MB und geht damit ueber die 8-MB-Schwelle der
-  # AWS-CLI, jeder Upload ist also ein Multipart-Upload. Bricht einer ab,
-  # bezahlt man die Teile weiter, ohne sie je zu sehen.
+  # Die Dumps liegen ueber der 8-MB-Schwelle der AWS-CLI, jeder Upload ist ein
+  # Multipart-Upload. Abgebrochene Teile sind im Listing unsichtbar und werden
+  # berechnet.
   rule {
     id     = "abort-incomplete-multipart-uploads"
     status = "Enabled"
@@ -127,19 +108,13 @@ resource "aws_s3_bucket_lifecycle_configuration" "teslamate" {
     }
   }
 
-  # Aufraeumregel, die es NUR wegen des Versionings gibt. Ohne sie waechst der
-  # Bucket unbemerkt weiter, obwohl oben "expiration" steht:
-  #
-  # 1. In einem versionierten Bucket loescht "expiration" nicht, sondern setzt
-  #    einen Delete-Marker. Die eigentlichen Daten liegen als noncurrent version
-  #    weiter da und kosten weiter Geld. Erst NoncurrentVersionExpiration raeumt
-  #    sie ab.
-  # 2. Ist die letzte echte Version weg, bleibt der Delete-Marker als einziges
-  #    allein zurueck. expired_object_delete_marker kehrt diese Leichen aus.
+  # In einem versionierten Bucket loescht "expiration" nicht, sondern setzt einen
+  # Delete-Marker; die Daten liegen als noncurrent version darunter weiter.
+  # noncurrent_version_expiration raeumt diese ab, expired_object_delete_marker
+  # die allein zurueckbleibenden Marker.
   #
   # expired_object_delete_marker vertraegt sich nicht mit "days" im selben
-  # expiration-Block, deshalb ist das hier eine eigene Regel und keine
-  # Ergaenzung der beiden oben.
+  # expiration-Block, daher eine eigene Regel.
   rule {
     id     = "cleanup-noncurrent-and-markers"
     status = "Enabled"

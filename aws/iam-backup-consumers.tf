@@ -1,67 +1,34 @@
-# Ein IAM-User je Backup-Konsument, bucket-scoped und schreibend-lesend.
+# Ein IAM-User je Backup-Konsument, jeweils auf genau seinen Bucket begrenzt.
 #
-# ================== Ausgangslage, gemessen am 2026-08-05 ==================
+# Namenskonventionen, die die Bootstrap-Policy des Terraform-Users voraussetzt:
 #
-# Bis hierher bedienten Paperless, Home Assistant und der HA-Archiv-CronJob
-# EINEN gemeinsamen User "homelab-backup", angelegt 2025-11-06 und nie rotiert.
-# Dessen Policy "homelab-backup-policy" v6 gewaehrte in einem einzigen Statement
-# PutObject, GetObject, DeleteObject und ListBucket auf beide Buckets. Zwei
-# Befunde daraus, die hier direkt einfliessen:
+#   - Der User-Name beginnt mit "homelab-" und der User hat KEINEN path, sonst
+#     wandert der in den ARN und das Muster "user/homelab-*" passt nicht mehr.
+#   - Die Policy hat path "/homelab/". AttachUserPolicy ist an die Bedingung
+#     ArnLike iam:PolicyARN = ".../policy/homelab/*" geknuepft.
+#   - Managed Policy statt aws_iam_user_policy: iam:PutUserPolicy ist nicht
+#     gewaehrt.
 #
-# 1. DeleteObjectVersion war NICHT enthalten. Versioning traegt in diesem Account
-#    also wirklich gegen einen kompromittierten Cluster und ist kein Anstrich.
-#    Deshalb steht es am Teslamate-Bucket an.
-# 2. Die Resource-Liste enthielt "arn:aws:s3:::homelab-homeassistent-elmstreet79*"
-#    mit angehaengtem Stern statt "/*". Das trifft die Objekte zwar mit, aber
-#    eben auch jeden anderen Bucket, dessen Name so beginnt. Bucket-Namen sind
-#    global eindeutig und von jedem registrierbar. Hier deshalb konsequent die
-#    zweizeilige Form: Bucket-ARN fuer ListBucket, Bucket-ARN + "/*" fuer alles
-#    auf Objektebene.
+# Rechte stehen konsequent in zwei Statements: der nackte Bucket-ARN fuer
+# s3:ListBucket, der Bucket-ARN mit "/*" fuer alles auf Objektebene. ListBucket
+# ist eine Aktion auf dem Bucket; an einem "/*"-ARN laeuft sie ins Leere und
+# liefert AccessDenied, obwohl die Policy vorhanden aussieht.
 #
-# Teslamate kam als erster Konsument sauber getrennt zur Welt und war die
-# Blaupause. Seit 2026-08-05 stehen die drei uebrigen daneben: paperless, Home
-# Assistant und der HA-Archiv-Job. Damit hat jeder Konsument seinen eigenen
-# User, seine eigene bucket-scoped Policy und seinen eigenen Access Key.
+# Kein Konsument hat s3:DeleteObjectVersion.
 #
-# ================== Warum drei und nicht einer ==================
+# Es gibt hier KEINE aws_iam_access_key-Ressource. Das Secret Access Key laege
+# sonst im Terraform-State. Die Keys entstehen in der AWS-Konsole und kommen per
+# kubeseal ins Cluster. Der Terraform-User hat kein iam:CreateAccessKey, ein
+# nachtraeglich eingefuegter aws_iam_access_key scheitert im apply mit
+# AccessDenied.
 #
-# Weil sie unterschiedlich viel duerfen muessen, und das ist der ganze Punkt der
-# Trennung. Nur HA braucht DeleteObject, weil es seine Retention selbst faehrt.
-# paperless synct ohne "--delete" und der Archiv-Job kopiert nur, beide loeschen
-# nie. Ein gemeinsamer Key haette zwangslaeufig das Maximum aller drei gekonnt,
-# und genau das war der Ist-Zustand: DeleteObject auf beiden Buckets fuer einen
-# Konsumenten, der es nie braucht.
-#
-# Der zweite Gewinn ist die Rotation. Ein geteilter Key laesst sich nicht
-# tauschen, ohne alle Konsumenten gleichzeitig anzufassen, deshalb wurde er neun
-# Monate lang nicht getauscht. Drei getrennte Keys rotieren einzeln.
-#
-# ================== Was hier bewusst NICHT steht ==================
-#
-# Es gibt KEINE aws_iam_access_key-Ressource. Das Secret Access Key landete
-# sonst im Terraform-State und der State-Bucket waere ab da ein
-# Credential-Speicher. Der Key wird einmal in der Konsole erzeugt und per
-# kubeseal ins Cluster gebracht.
-#
-# Das ist gleichzeitig die Sicherung der Bootstrap-Policy: der Terraform-User
-# darf User unter "homelab-*" anlegen und Policies unter "/homelab/*" anhaengen,
-# aber kein iam:CreateAccessKey. Er kann sich also keine benutzbaren
-# Zugangsdaten bauen, auch nicht ueber den Umweg eines neuen Users. Wer
-# aws_iam_access_key hier nachtraegt, macht diese Eigenschaft kaputt und bekommt
-# ausserdem beim apply ein AccessDenied.
-#
-# Die Bootstrap-Policy "terraform-homelab-iam" selbst ist bewusst NICHT in
-# Terraform. Terraform kann sich seine eigenen Rechte nicht selbst erteilen,
-# das ist dieselbe Kategorie wie der State-Bucket: von Hand angelegt, im Skill
-# dokumentiert.
+# Die Bootstrap-Policy "terraform-homelab-iam" selbst liegt nicht in Terraform,
+# sie ist von Hand angelegt.
 
 # ===========================================
 # teslamate
 # ===========================================
 
-# Der Name MUSS mit "homelab-" beginnen, sonst greift die Bootstrap-Policy
-# nicht (Resource "arn:aws:iam::...:user/homelab-*"). Und der User bekommt
-# KEINEN path, sonst wandert der in den ARN und das Muster passt nicht mehr.
 resource "aws_iam_user" "teslamate_backup" {
   name = "homelab-teslamate-backup"
 
@@ -71,10 +38,6 @@ resource "aws_iam_user" "teslamate_backup" {
   }
 }
 
-# path "/homelab/" ist Pflicht: die Bootstrap-Policy erlaubt AttachUserPolicy
-# nur unter der Bedingung ArnLike iam:PolicyARN = ".../policy/homelab/*".
-# Ebenso Pflicht ist die Managed Policy statt aws_iam_user_policy (inline):
-# iam:PutUserPolicy ist bewusst nicht gewaehrt.
 resource "aws_iam_policy" "teslamate_backup" {
   name        = "teslamate-backup"
   path        = "/homelab/"
@@ -84,12 +47,9 @@ resource "aws_iam_policy" "teslamate_backup" {
     Version = "2012-10-17"
     Statement = [
       {
-        Sid    = "ListOwnBucket"
-        Effect = "Allow"
-        Action = ["s3:ListBucket"]
-        # ListBucket ist eine Aktion AUF dem Bucket, nicht auf Objekten. Sie
-        # gehoert an den nackten Bucket-ARN, ein "/*" hier laesst sie still
-        # ins Leere laufen.
+        Sid      = "ListOwnBucket"
+        Effect   = "Allow"
+        Action   = ["s3:ListBucket"]
         Resource = [aws_s3_bucket.teslamate.arn]
       },
       {
@@ -98,10 +58,9 @@ resource "aws_iam_policy" "teslamate_backup" {
         Action = [
           "s3:PutObject",
           "s3:GetObject",
-          # Der Dump geht als Multipart hoch. Scheitert er mittendrin, will die
-          # CLI die angefangenen Teile selbst abraeumen. Ohne dieses Recht
-          # kaeme dabei ein zweites, irrefuehrendes AccessDenied hinterher, das
-          # den eigentlichen Fehler im Log verdeckt.
+          # Der Dump geht als Multipart hoch. Ohne dieses Recht kann die CLI
+          # angefangene Teile nach einem Abbruch nicht selbst abraeumen und
+          # meldet ein zweites AccessDenied hinter dem eigentlichen Fehler.
           "s3:AbortMultipartUpload",
         ]
         Resource = ["${aws_s3_bucket.teslamate.arn}/*"]
@@ -110,10 +69,8 @@ resource "aws_iam_policy" "teslamate_backup" {
   })
 }
 
-# ACHTUNG, kein DeleteObject und kein DeleteObjectVersion, und das ist kein
-# Versehen: der CronJob loescht nie. Aufgeraeumt wird ausschliesslich durch die
-# Lifecycle-Regeln, und die laufen AWS-seitig ohne diesen Key. Damit kann ein
-# kompromittierter Cluster keinen einzigen Backup-Stand entfernen.
+# Kein DeleteObject: der CronJob loescht nie, aufgeraeumt wird ausschliesslich
+# durch die Lifecycle-Regeln, und die laufen AWS-seitig ohne diesen Key.
 resource "aws_iam_user_policy_attachment" "teslamate_backup" {
   user       = aws_iam_user.teslamate_backup.name
   policy_arn = aws_iam_policy.teslamate_backup.arn
@@ -135,14 +92,10 @@ resource "aws_iam_user" "paperless_backup" {
   }
 }
 
-# Kein DeleteObject, und das faellt hier nicht schwer: der Sidecar macht
-# "aws s3 sync" OHNE "--delete". Er hat also noch nie ein Objekt entfernt, der
-# alte geteilte Key trug das Recht nur mit, weil HA es brauchte.
+# Kein DeleteObject: der Sidecar macht "aws s3 sync" ohne "--delete".
 #
-# Auch keine Einschraenkung auf das Praefix "paperless-backup/", obwohl der
-# Sidecar nur dorthin schreibt. Der Bucket gehoert ausschliesslich diesem
-# Konsumenten, eine Praefix-Bedingung wuerde nichts zusaetzlich schuetzen und
-# beim ersten Restore in ein anderes Verzeichnis im Weg stehen.
+# Keine Einschraenkung auf das Praefix "paperless-backup/", obwohl der Sidecar
+# nur dorthin schreibt. Der Bucket gehoert ausschliesslich diesem Konsumenten.
 resource "aws_iam_policy" "paperless_backup" {
   name        = "paperless-backup"
   path        = "/homelab/"
@@ -162,10 +115,9 @@ resource "aws_iam_policy" "paperless_backup" {
         Effect = "Allow"
         Action = [
           "s3:PutObject",
-          # GetObject braucht "s3 sync" nicht zum Hochladen, es vergleicht ueber
-          # die Listing-Metadaten. Es steht hier fuer den Rueckweg: ein Restore
-          # ist ein "s3 sync" in die Gegenrichtung, und der soll nicht daran
-          # scheitern, dass erst jemand eine Policy anfassen muss.
+          # Zum Hochladen braucht "s3 sync" kein GetObject, es vergleicht ueber
+          # die Listing-Metadaten. Es deckt den Rueckweg ab, ein Restore ist ein
+          # "s3 sync" in die Gegenrichtung.
           "s3:GetObject",
           "s3:AbortMultipartUpload",
         ]
@@ -184,10 +136,10 @@ resource "aws_iam_user_policy_attachment" "paperless_backup" {
 # Home Assistant (die Instanz selbst)
 # ===========================================
 
-# Konsument ist HAs eingebaute S3-Backup-Integration. Ihr Key steht NICHT im
-# Repo, sondern in der HA-Konfiguration auf dem Longhorn-Volume, eingetragen
-# ueber die HA-UI. Das ist der einzige der vier Konsumenten, dessen Key nicht
-# per kubeseal ins Cluster kommt.
+# Konsument ist die eingebaute S3-Backup-Integration von Home Assistant. Ihr Key
+# steht nicht im Repo, sondern in der HA-Konfiguration auf dem Longhorn-Volume
+# und wird ueber die HA-UI eingetragen. Es ist der einzige der Konsumenten,
+# dessen Key nicht per kubeseal ins Cluster kommt.
 resource "aws_iam_user" "home_assistant_backup" {
   name = "homelab-home-assistant-backup"
 
@@ -197,19 +149,12 @@ resource "aws_iam_user" "home_assistant_backup" {
   }
 }
 
-# Der EINZIGE Konsument mit DeleteObject, und das ist Absicht statt Nachlaessigkeit:
-# HA fuehrt seine Retention selbst ("behalte N automatische Backups") und muss
-# dafuer alte Staende aus dem Bucket entfernen. Nimmt man ihm das Recht, laeuft
-# der Bucket unbegrenzt voll und niemand merkt es, weil das Hochladen weiter
-# klappt.
+# Der einzige Konsument mit DeleteObject: Home Assistant fuehrt seine Retention
+# selbst ("behalte N automatische Backups") und entfernt dafuer alte Staende aus
+# dem Bucket.
 #
-# Was ihm bewusst fehlt, ist s3:DeleteObjectVersion. Das ist die Bedingung, unter
-# der Versioning an diesem Bucket ueberhaupt etwas taugt (siehe die lange
-# Begruendung in s3-backup-buckets.tf): HAs Loeschen setzt dann nur einen
-# Delete-Marker, der eigentliche Stand liegt als noncurrent version darunter und
-# ueberlebt einen kompromittierten Cluster.
-#
-# Ebenfalls nicht drin: s3:GetObjectTagging. HA setzt keine Tags und liest keine.
+# Nicht enthalten: s3:DeleteObjectVersion und s3:GetObjectTagging. Die
+# Integration setzt und liest keine Tags.
 resource "aws_iam_policy" "home_assistant_backup" {
   name        = "home-assistant-backup"
   path        = "/homelab/"
@@ -221,8 +166,8 @@ resource "aws_iam_policy" "home_assistant_backup" {
       {
         Sid    = "ListOwnBucket"
         Effect = "Allow"
-        # ListBucket deckt neben dem Listing auch HeadBucket ab, mit dem die
-        # Integration beim Einrichten prueft, ob der Bucket erreichbar ist.
+        # ListBucket deckt auch HeadBucket ab, mit dem die Integration beim
+        # Einrichten die Erreichbarkeit des Buckets prueft.
         Action   = ["s3:ListBucket"]
         Resource = [aws_s3_bucket.home_assistant.arn]
       },
@@ -233,7 +178,7 @@ resource "aws_iam_policy" "home_assistant_backup" {
           "s3:PutObject",
           "s3:GetObject",
           "s3:DeleteObject",
-          # Die Tars liegen bei rund 490 MB, HA laedt sie als Multipart hoch.
+          # Die Tars liegen bei rund 490 MB und gehen als Multipart hoch.
           "s3:AbortMultipartUpload",
         ]
         Resource = ["${aws_s3_bucket.home_assistant.arn}/*"]
@@ -253,12 +198,8 @@ resource "aws_iam_user_policy_attachment" "home_assistant_backup" {
 
 # Konsument ist der CronJob "ha-backup-archive"
 # (kubernetes-homelab/manifests/home-assistant/backup-archive-cronjob.yaml),
-# Secret "s3-archive-credentials" im Namespace home-assistant.
-#
-# Eigener User, obwohl derselbe Bucket: der Job braucht deutlich weniger als HA.
-# Er kopiert einen Stand server-seitig auf einen zweiten Key und loescht nie.
-# Genau die Archivstaende, die er anlegt, soll ein kompromittierter Cluster ueber
-# diesen Key nicht wieder entfernen koennen.
+# Secret "s3-archive-credentials" im Namespace home-assistant. Er kopiert einen
+# Stand server-seitig auf einen zweiten Key im selben Bucket und loescht nie.
 resource "aws_iam_user" "home_assistant_archive" {
   name = "homelab-home-assistant-archive"
 
@@ -268,21 +209,19 @@ resource "aws_iam_user" "home_assistant_archive" {
   }
 }
 
-# Der Zuschnitt folgt exakt den drei API-Aufrufen des Jobs:
+# Der Zuschnitt folgt den drei API-Aufrufen des Jobs:
 #
-#   list-objects-v2  -> s3:ListBucket   (Idempotenz-Pruefung + juengstes Tar suchen)
+#   list-objects-v2  -> s3:ListBucket   (Idempotenz-Pruefung, juengstes Tar suchen)
 #   copy-object      -> s3:GetObject auf der Quelle, s3:PutObject auf dem Ziel
-#   head-object      -> s3:GetObject   (Groessenvergleich als Gegenprobe)
+#   head-object      -> s3:GetObject   (Groessenvergleich)
 #
-# Kein AbortMultipartUpload: copy-object kopiert in einem Durchgang bis 5 GB, es
-# gibt hier keinen Multipart-Upload zum Abbrechen. Waechst ein HA-Tar je
-# darueber, braucht der Job einen Multipart-Copy und diese Policy die
-# entsprechenden Rechte dazu.
+# Kein AbortMultipartUpload: copy-object kopiert bis 5 GB in einem Durchgang, es
+# gibt keinen Multipart-Upload zum Abbrechen. Ueberschreitet ein HA-Tar diese
+# Groesse, braucht der Job einen Multipart-Copy und diese Policy die passenden
+# Rechte.
 #
-# Kein GetObjectTagging, und zwar bewusst: genau daran scheiterte der erste
-# Testlauf mit "aws s3 cp". Der Job benutzt seitdem "s3api copy-object
-# --tagging-directive REPLACE" und kommt ohne aus. Wer dieses Recht hier
-# nachtraegt, macht die Ursache unsichtbar, statt sie zu beheben.
+# Kein GetObjectTagging: der Job benutzt "s3api copy-object --tagging-directive
+# REPLACE" und kommt ohne aus.
 resource "aws_iam_policy" "home_assistant_archive" {
   name        = "home-assistant-archive"
   path        = "/homelab/"
@@ -316,67 +255,38 @@ resource "aws_iam_user_policy_attachment" "home_assistant_archive" {
 }
 
 # ===========================================
-# k3s etcd-Snapshots
+# etcd-Snapshots
 # ===========================================
 
-# Konsument ist k3s selbst auf den drei Server-Nodes (cp-1, raspi4, raspi5),
-# nicht ein Workload im Cluster. Die Zugangsdaten liegen im Secret
-# "k3s-etcd-s3-config" im Namespace kube-system, auf das die Units per
-# "--etcd-s3-config-secret" zeigen.
-#
-# Das ist der einzige Konsument, dessen Key NICHT von einem Pod gelesen wird,
-# sondern vom k3s-Server-Prozess. Der Umweg ueber ein Secret statt
-# "--etcd-s3-access-key" in der Unit ist Absicht: sonst staende der Key im
-# Klartext in drei systemd-Units, und jede Rotation waere drei Unit-Edits mit
-# Quorum-Check statt eines Commits.
+# Konsumenten sind die drei CronJobs in kube-system
+# (kubernetes-homelab/manifests/etcd-backup/), je einer pro Control-Plane. Sie
+# lesen die Zugangsdaten aus dem Secret "etcd-backup-s3" im selben Namespace.
 resource "aws_iam_user" "etcd_backup" {
   name = "homelab-etcd-backup"
 
   tags = {
-    Name      = "k3s-etcd-snapshot-offsite"
+    Name      = "etcd-snapshot-offsite"
     ManagedBy = "terraform"
   }
 }
 
-# Der zweite Konsument mit DeleteObject, nach Home Assistant, und aus demselben
-# Grund: k3s fuehrt seine Snapshot-Retention selbst und raeumt aeltere Staende
-# aus dem Bucket.
+# Kein DeleteObject: die CronJobs laden per "aws s3 cp" hoch und loeschen nie.
+# Die Tiefe des Buckets kommt allein aus den Lifecycle-Regeln, und die laufen
+# AWS-seitig ohne diesen Key.
 #
-# Erst war geplant, ihm das Loeschen zu verwehren und die Tiefe rein ueber
-# Lifecycle zu machen. Das geht hier NICHT, und der Grund ist eine Eigenheit von
-# --etcd-s3-config-secret: das Secret kennt keinen Retention-Schluessel, und
-# sobald ein weiteres --etcd-s3-*-Flag an der Unit steht, ignoriert k3s das
-# Secret vollstaendig und will die Zugangsdaten wieder im Klartext als Flags.
-# Die S3-Tiefe haengt damit an --etcd-snapshot-retention, und das gilt zugleich
-# lokal. Ein unerreichbar hoher Wert haette die Node-Platten volllaufen lassen,
-# der Engpass ist cp-1 mit 30 GB.
-#
-# Was den Verzicht traegt: DeleteObjectVersion fehlt, und der Bucket ist
-# versioniert. k3s' Loeschen setzt damit nur einen Delete-Marker, der Snapshot
-# liegt als noncurrent version darunter weiter und ueberlebt
-# etcd_snapshot_noncurrent_days. Ein kompromittierter Cluster kann die Staende
-# also unsichtbar machen, aber nicht vernichten. Das ist exakt die Bedingung,
-# unter der Versioning am HA-Bucket ueberhaupt etwas taugt.
-#
-# GetObject ist drin, obwohl der Schreibpfad es nicht braucht. k3s listet und
-# liest beim Start seine S3-Snapshots, um die ConfigMap k3s-etcd-snapshots zu
-# fuellen, und der Restore-Weg ("k3s server --cluster-reset
-# --etcd-s3 --cluster-reset-restore-path=...") laedt den Snapshot ueber genau
-# diesen Key wieder herunter. Ohne GetObject steht man im Ernstfall vor einem
-# vollen Bucket, den man erst per Konsole aufmachen muss.
+# GetObject deckt den Rueckweg ab: ein Restore laedt den Snapshot ueber diesen
+# Key wieder herunter.
 resource "aws_iam_policy" "etcd_backup" {
   name        = "etcd-backup"
   path        = "/homelab/"
-  description = "Schreib- und Lesezugriff der k3s-Server-Nodes auf den etcd-Snapshot-Bucket"
+  description = "Schreib- und Lesezugriff der etcd-Snapshot-CronJobs auf ihren Bucket"
 
   policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
       {
-        Sid    = "ListOwnBucket"
-        Effect = "Allow"
-        # Nackter Bucket-ARN. k3s listet den Bucket bei jedem Snapshot-Lauf, um
-        # seine Retention zu bestimmen, und beim Start fuer die ConfigMap.
+        Sid      = "ListOwnBucket"
+        Effect   = "Allow"
         Action   = ["s3:ListBucket"]
         Resource = [aws_s3_bucket.etcd_snapshots.arn]
       },
@@ -386,11 +296,7 @@ resource "aws_iam_policy" "etcd_backup" {
         Action = [
           "s3:PutObject",
           "s3:GetObject",
-          # Fuer k3s' eigene Retention, siehe oben. KEIN DeleteObjectVersion,
-          # das ist die Bedingung, unter der das vertretbar ist.
-          "s3:DeleteObject",
-          # Ein Snapshot liegt nach dem Defrag bei rund 16 MB und geht als
-          # Multipart hoch.
+          # Ein Snapshot liegt bei rund 55 MB und geht als Multipart hoch.
           "s3:AbortMultipartUpload",
         ]
         Resource = ["${aws_s3_bucket.etcd_snapshots.arn}/*"]
@@ -410,22 +316,11 @@ resource "aws_iam_user_policy_attachment" "etcd_backup" {
 
 # Konsument ist der CronJob "offsite-backup-freshness"
 # (kubernetes-homelab/manifests/backup-monitor/), Secret
-# "s3-backup-monitor-credentials" im Namespace monitoring.
+# "s3-backup-monitor-credentials" im Namespace monitoring. Er prueft je Bucket
+# und je Praefix, ob dort ein hinreichend junges Objekt liegt.
 #
-# Er beantwortet die eine Frage, die die Job-Alerts NICHT beantworten koennen:
-# ist im Bucket wirklich etwas angekommen. Ein erfolgreicher CronJob beweist das
-# nicht. Bei paperless klafft die Luecke am weitesten, weil der Upload im
-# Sidecar auf eigenem Timer laeuft und ein Fehlschlag dort nur eine Zeile ins
-# Log schreibt, und bei HA gibt es ueberhaupt keinen Job, den man beobachten
-# koennte.
-#
-# Deshalb hat dieser User als einziger Zugriff auf ALLE Buckets, und deshalb
-# darf er als einziger gar nichts damit tun ausser sie aufzulisten.
-#
-# Seit dem etcd-Bucket sind es vier. Gerade dort ist die Sonde der einzige
-# Beleg: k3s laedt seine Snapshots im Server-Prozess hoch, es gibt keinen
-# CronJob und keinen Pod-Status, an dem ein Fehlschlag sichtbar waere, sondern
-# nur eine Zeile im journal auf der jeweiligen Node.
+# Es ist der einzige User mit Zugriff auf alle vier Buckets und zugleich der
+# einzige, der darin nichts tun darf ausser aufzulisten.
 resource "aws_iam_user" "backup_monitor" {
   name = "homelab-backup-monitor"
 
@@ -435,25 +330,14 @@ resource "aws_iam_user" "backup_monitor" {
   }
 }
 
-# NUR s3:ListBucket, und das reicht exakt aus: list-objects-v2 liefert Key,
-# LastModified und Size je Objekt, und mehr braucht die Sonde nicht. Kein
-# GetObject, der Inhalt der Backups geht sie nichts an. Ein geleakter Key
-# verraet damit hoechstens Dateinamen und Zeitstempel, und die Dateinamen des
-# paperless-Exports tragen Titel und Korrespondent.
+# Nur s3:ListBucket. list-objects-v2 liefert Key, LastModified und Size je
+# Objekt, mehr braucht die Sonde nicht. Ohne GetObject verraet ein geleakter Key
+# hoechstens Dateinamen und Zeitstempel.
 #
-# Das ist der Grund fuer den eigenen User statt eines Rechts an einem
-# bestehenden: kein Konsument darf in die Buckets der anderen sehen, und die
-# Sonde muss in alle drei sehen. Genau eine Richtung dieser Kreuzung ist
-# harmlos, naemlich diese.
-# FALLE, hier einmal teuer bezahlt: "description" an aws_iam_policy ist ForceNew.
-# AWS kennt keinen Aufruf, der die Beschreibung einer Policy aendert, Terraform
-# loescht sie also und legt sie neu an, inklusive Detach und Attach. Genau das
-# passierte beim Hinzufuegen des vierten Buckets, weil in der Beschreibung
-# "drei Backup-Buckets" stand.
-#
-# Die Beschreibungen hier zaehlen deshalb nichts mehr. Die Resource-Liste unten
-# darf wachsen, ohne dass die Policy dabei durch ein Loch laeuft, in dem die
-# Sonde keine Rechte hat.
+# "description" an aws_iam_policy ist ForceNew: AWS kennt keinen Aufruf, der sie
+# aendert, Terraform loescht die Policy und legt sie samt Detach und Attach neu
+# an. Der Text nennt deshalb keine Bucket-Anzahl, damit die Resource-Liste unten
+# wachsen kann, ohne die Policy kurzzeitig zu entfernen.
 resource "aws_iam_policy" "backup_monitor" {
   name        = "backup-monitor"
   path        = "/homelab/"
@@ -466,9 +350,6 @@ resource "aws_iam_policy" "backup_monitor" {
         Sid    = "ListAllBackupBuckets"
         Effect = "Allow"
         Action = ["s3:ListBucket"]
-        # Nackte Bucket-ARNs, kein "/*": ListBucket ist eine Aktion auf dem
-        # Bucket. Mit "/*" liefe sie still ins Leere und die Sonde bekaeme
-        # AccessDenied, obwohl die Policy vorhanden aussieht.
         Resource = [
           aws_s3_bucket.paperless.arn,
           aws_s3_bucket.home_assistant.arn,

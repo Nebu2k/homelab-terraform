@@ -1,50 +1,30 @@
-# Offsite-Ablage der etcd-Snapshots der drei k3s-Server-Nodes.
+# Offsite-Ablage der etcd-Snapshots der drei Control-Plane-Nodes.
 #
-# ================== Warum es diesen Bucket gibt ==================
+# Inhalt: ein Snapshot je Node und Lauf, Objektname
+# "etcd-snapshot-<node>-<unix-ts>" im Bucket-Root. Ein Snapshot liegt bei rund
+# 55 MB. Geschrieben wird von drei CronJobs im Cluster (kube-system, Manifeste
+# in kubernetes-homelab/manifests/etcd-backup/), je einer pro Control-Plane,
+# zweimal taeglich und gestaffelt. Talos laedt Snapshots nicht selbst hoch, es
+# gibt sie nur ueber die API heraus.
 #
-# Nicht wegen etcd. Der Cluster-State liegt per GitOps im Repo und waere aus
-# leerem Blech nachbaubar. Es geht um die 25 SealedSecrets darin: entschluesseln
-# kann sie ausschliesslich der Sealing-Key aus dem Namespace kube-system, und
-# der existierte bis hierher NUR in etcd. etcd-Snapshots lagen nur auf den
-# Server-Nodes selbst. Gehen cp-1, raspi4 und raspi5 gemeinsam verloren, waere
-# jedes Secret im Repo Datenmuell und muesste bei 25 Diensten neu beschafft
-# werden. Das ist der teuerste Einzelverlust im ganzen Aufbau und der einzige,
-# den weder Longhorn noch die drei App-Buckets abdecken.
-#
-# Der Weg ueber k3s' eingebautes "--etcd-s3" statt eines eigenen Export-Jobs:
-# k3s laedt seine ohnehin alle 12h erzeugten Snapshots selbst hoch, es kommt
-# kein weiterer Dienst dazu, und die Sealing-Key-Rotation alle 30 Tage ist
-# automatisch mit drin.
-#
-# ================== Der Inhalt ist heikler als bei den anderen dreien ==========
-#
-# Ein etcd-Snapshot enthaelt JEDES Secret des Clusters, nicht nur die Sealing-
-# Keys. Das ist der Grund, warum "--secrets-encryption" auf den Server-Nodes
-# eingeschaltet wurde, bevor der erste Snapshot hier landete: ohne den Schalter
-# laegen alle Cluster-Secrets im Klartext in diesem Bucket.
-#
-# Damit haengt an diesem Bucket eine Bedingung, die die anderen drei nicht
-# haben: er ist nur so gut wie der Zustand von "k3s secrets-encrypt status".
-# Steht der je wieder auf Disabled, ist der Inhalt hier Klartext.
-#
-# Umgekehrt gilt: ohne /var/lib/rancher/k3s/server/cred/encryption-config.json
-# ist ein Snapshot von hier NICHT wiederherstellbar. Diese Datei ist rund 1 KB
-# gross, aendert sich nur bei einer Key-Rotation und gehoert deshalb ins
-# Notfall-Kit auf Sebastians Mac, genau wie der HA-Backup-Key. Ein Bucket voll
-# Snapshots ohne diese Datei ist wertlos.
+# Ein Snapshot enthaelt jedes Secret des Clusters. Die Cluster-Secrets sind in
+# etcd verschluesselt abgelegt (cluster.secretboxEncryptionSecret in der Machine
+# Config); der zugehoerige Schluessel steht in talsecret.sops.yaml und ist ohne
+# den privaten age-Key nicht lesbar. Ohne diesen Schluessel ist ein Snapshot aus
+# diesem Bucket nicht wiederherstellbar.
 
 resource "aws_s3_bucket" "etcd_snapshots" {
   bucket = var.etcd_snapshots_bucket
 
-  # force_destroy bleibt aus (Default), siehe die Begruendung an den anderen
-  # Buckets: S3 lehnt das Loeschen eines befuellten Buckets mit BucketNotEmpty
-  # ab, der Schutz sitzt an der API und nicht daran, ob Terraform ihn kennt.
+  # force_destroy steht auf dem Default false. S3 lehnt das Loeschen eines
+  # befuellten Buckets mit BucketNotEmpty ab, prevent_destroy faengt den Fall
+  # bereits im plan ab.
   lifecycle {
     prevent_destroy = true
   }
 
   tags = {
-    Name      = "k3s-etcd-snapshots"
+    Name      = "etcd-snapshot-offsite"
     ManagedBy = "terraform"
   }
 }
@@ -77,18 +57,8 @@ resource "aws_s3_bucket_server_side_encryption_configuration" "etcd_snapshots" {
   }
 }
 
-# Versioning AN, und hier traegt es mehr als an den anderen Buckets, weil dieser
-# Key als einer von zweien DeleteObject hat (Begruendung in
-# iam-backup-consumers.tf: k3s fuehrt seine Retention selbst und die S3-Tiefe
-# laesst sich nicht davon trennen).
-#
-# Ihm fehlt DeleteObjectVersion. Jedes Loeschen, ob von k3s oder von jemandem
-# mit dem Key in der Hand, setzt damit nur einen Delete-Marker. Der Snapshot
-# liegt als noncurrent version darunter und ueberlebt
-# etcd_snapshot_noncurrent_days. Ohne Versioning waere dieser Bucket der einzige
-# Offsite-Ort der Sealing-Keys UND per Key ausraeumbar.
-#
-# ACHTUNG: Versioning wirkt nicht rueckwirkend. Es stand von Anfang an an.
+# Versioning ist aktiv. Es wirkt nicht rueckwirkend, geschuetzt ist nur, was
+# danach geschrieben wurde.
 resource "aws_s3_bucket_versioning" "etcd_snapshots" {
   bucket = aws_s3_bucket.etcd_snapshots.id
 
@@ -101,29 +71,16 @@ resource "aws_s3_bucket_versioning" "etcd_snapshots" {
   }
 }
 
-# Aufgeraeumt wird hier ZWEIMAL, und das ist Absicht.
+# Die Tiefe des Buckets kommt ausschliesslich aus diesen Regeln. Die CronJobs
+# laden nur hoch und loeschen nichts.
 #
-# Erstens raeumt k3s selbst: --etcd-snapshot-retention (28, also 14 Tage bei zwei
-# Laeufen taeglich) gilt lokal und in S3. Das ist der Normalbetrieb.
-#
-# Zweitens raeumen diese Regeln, und sie sind kein Zierrat, sondern fangen genau
-# die Faelle, in denen k3s es nicht tut: eine Node, die dauerhaft weg ist und
-# ihre Snapshots nie wieder anfasst, ein Fehlschlag beim Loeschen, oder die
-# noncurrent versions, die k3s' Delete-Marker hinterlaesst und die es selbst
-# gar nicht sehen kann.
-#
-# Der Bucket gehoert ausschliesslich diesem einen Zweck, deshalb greifen die
-# Regeln ohne Praefix-Filter. Es gibt hier bewusst kein "--etcd-s3-folder": eine
-# Praefix-Kopplung zwischen Node-Flag und Lifecycle-Regel waere eine weitere
-# Stelle, die beim Auseinanderlaufen still die Aufraeumung abschaltet. Und
-# ohnehin waere jedes weitere --etcd-s3-*-Flag an der Unit fatal, es schaltet
-# das Config-Secret ab.
+# Der Bucket dient ausschliesslich diesem Zweck, die Regeln greifen deshalb ohne
+# Praefix-Filter ueber den gesamten Inhalt.
 resource "aws_s3_bucket_lifecycle_configuration" "etcd_snapshots" {
   bucket = aws_s3_bucket.etcd_snapshots.id
 
-  # Ein Snapshot liegt bei rund 48 MB und damit ueber der 8-MB-Schwelle, ab der
-  # in Teilen hochgeladen wird. Abgebrochene Teile sind unsichtbar und werden
-  # trotzdem berechnet.
+  # Snapshots liegen ueber der 8-MB-Schwelle der AWS-CLI und gehen als Multipart
+  # hoch. Abgebrochene Teile sind im Listing unsichtbar und werden berechnet.
   rule {
     id     = "abort-incomplete-multipart-uploads"
     status = "Enabled"
@@ -146,14 +103,13 @@ resource "aws_s3_bucket_lifecycle_configuration" "etcd_snapshots" {
     }
   }
 
-  # Dieselbe Falle wie am Teslamate-Bucket: in einem versionierten Bucket
-  # loescht "expiration" nicht, sondern setzt einen Delete-Marker. Ohne
-  # noncurrent_version_expiration liegen die Snapshots darunter weiter und
-  # kosten weiter, und expired_object_delete_marker kehrt die allein
-  # zurueckbleibenden Marker aus.
+  # In einem versionierten Bucket loescht "expiration" nicht, sondern setzt einen
+  # Delete-Marker; die Daten liegen als noncurrent version darunter weiter.
+  # noncurrent_version_expiration raeumt diese ab, expired_object_delete_marker
+  # die allein zurueckbleibenden Marker.
   #
   # expired_object_delete_marker vertraegt sich nicht mit "days" im selben
-  # expiration-Block, deshalb eine eigene Regel.
+  # expiration-Block, daher eine eigene Regel.
   rule {
     id     = "cleanup-noncurrent-and-markers"
     status = "Enabled"
