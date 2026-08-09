@@ -11,24 +11,34 @@ workstation, because it touches hypervisor, registrar and cloud account.
 
 ## Stacks
 
-Three independent root modules, each with its own state file. No cross-stack
+Four independent root modules, each with its own state file. No cross-stack
 `remote_state` lookups, the coupling between them is documented in comments
 instead.
 
 | Stack | Manages | Provider |
 |-------|---------|----------|
-| [`proxmox/`](proxmox/) | VMs on the Proxmox host, cloud-init driven | `bpg/proxmox` |
+| [`proxmox/`](proxmox/) | The Talos control plane VM on the Proxmox host | `bpg/proxmox` |
 | [`cloudflare/`](cloudflare/) | Public DNS records for the exposed services | `cloudflare/cloudflare` |
 | [`aws/`](aws/) | S3 buckets and IAM users for the offsite backups | `hashicorp/aws` |
+| [`argocd-talos/`](argocd-talos/) | The ArgoCD release that bootstraps the cluster | `hashicorp/helm` |
 
 State lives in a versioned S3 bucket, one key per stack
 (`homelab/<stack>/terraform.tfstate`). The bucket itself was created by hand and
 is not managed here, for the usual chicken-and-egg reason.
 
+`.terraform.lock.hcl` **is** committed, one per stack. It used to be gitignored,
+which left the provider version to whatever satisfied the range in
+`required_providers` at the time of the `init`. The ranges here are wide on
+purpose, so that anything below a major stays quiet, and the lock file is what
+turns that into a reproducible version instead of a lottery. The files carry
+`darwin_arm64` hashes only, because that is the only place these stacks are ever
+applied from. Add a platform with `terraform providers lock -platform=linux_amd64`
+before running them anywhere else.
+
 ## Usage
 
 ```bash
-cd aws          # or cloudflare, or proxmox
+cd aws          # or cloudflare, proxmox, argocd-talos
 terraform init
 terraform plan
 terraform apply
@@ -37,24 +47,37 @@ terraform apply
 Credentials never live in the repo:
 
 * **AWS**: taken from the CLI environment (`~/.aws`, profile `default`). The
-  same credentials back the S3 state backend of all three stacks, so there is no
+  same credentials back the S3 state backend of all four stacks, so there is no
   variable for them.
 * **Proxmox / Cloudflare**: non-secret values go into `terraform.tfvars` (gitignored,
   see the `.example` files), secrets come from `TF_VAR_*` environment variables.
+* **Talos cluster**: no credential at all. `argocd-talos/` reads the kubeconfig
+  that `talosctl` generated under `kubernetes-homelab/talos/clusterconfig/`.
 
 ## proxmox/
 
-A single `vm-module` builds a cloud-init VM from a downloaded cloud image:
-static IP, SSH key, disk, and a rendered user-data snippet. Each VM is one small
-file at the root that calls the module with its parameters.
+One resource pair: the Talos `nocloud` image pulled from the Image Factory, and
+the single control plane VM `talos-cp-1` (`.20`, vmid 110) cloned from it.
 
-Live right now is one Arch VM. The Proxmox Backup Server, MinIO and Windows
-definitions are kept as commented-out blueprints rather than deleted, together
-with the reason each one was retired. MinIO is the interesting one: its provider
-pointed at a fixed address and got initialised on *every* plan, so once the VM
-was stopped it would have blocked the whole stack. The bucket resource was
-removed with `terraform state rm` instead of destroyed, to keep the data on the
-VM disk.
+That is the whole stack now. It used to carry a `vm-module` that built cloud-init
+VMs from cloud images, plus definitions for Arch, MinIO, Windows and a Proxmox
+Backup Server. All of them are gone, and the reasons are in the git history
+rather than in commented-out blocks: MinIO lost its purpose when Longhorn started
+backing up to the UniFi NAS over CIFS, and the rest were retired one by one as
+the cluster took over their jobs.
+
+The Talos VMs deliberately do *not* go through a module. Nothing a cloud-init
+module offers applies: Talos has no shell, no package manager and no user
+accounts. Its entire node configuration is a machine config under
+`kubernetes-homelab/talos/`, applied with `talosctl`.
+
+The two remaining Talos control plane nodes are bare metal, `raspi5` and
+`prodesk`, and are therefore not in this stack at all. `talos-cp-1` is the last
+one on the hypervisor, and it is a pet: the RTL-SDR stick is passed through to
+it by vendor/product ID, so `readsb` is pinned to this node by `nodeSelector`.
+The sizing comments in [`variables.tf`](proxmox/variables.tf) are worth reading
+before changing memory or disk, both numbers are derived from a specific failure
+scenario rather than from what happened to be free.
 
 ## cloudflare/
 
@@ -85,7 +108,7 @@ with public access blocked, SSE-S3 (AES256) and lifecycle rules:
 
 | Bucket | Contents | Versioning | Retention |
 |--------|----------|-----------|-----------|
-| `homelab-etcd-snapshots-*` | k3s etcd snapshots from the three server nodes | Enabled | k3s keeps 28 per node, lifecycle caps at 30 days |
+| `homelab-etcd-snapshots-*` | etcd snapshots from the three control plane nodes | Enabled | 28 kept per node, lifecycle caps at 30 days |
 | `homelab-teslamate-backup` | `pg_dump` of the Teslamate database | Enabled | `daily/` 30 days, `monthly/` 365 days |
 | `homelab-homeassistent-*` | Home Assistant backup tars | Disabled, on purpose | HA drives its own depth, monthly archive 180 days |
 | `homelab-paperless-backup` | paperless-ngx `document_exporter` output | Enabled | none yet, the concept is still open |
@@ -109,9 +132,29 @@ bootstrap policy is itself out of band by necessity: Terraform cannot grant
 itself its own permissions.
 
 The `outputs.tf` here is written to be read, not just consumed. It prints the
-retention state of every bucket, the exact `--etcd-s3-*` flags that belong in
-each k3s unit, and which Kubernetes secret every IAM user's key is supposed to
-end up in.
+retention state of every bucket, the flags that belong on each control plane
+node, and which Kubernetes secret every IAM user's key is supposed to end up in.
+
+**Stale in this stack:** the comments and the etcd output still describe the k3s
+mechanism, where `--etcd-s3-*` flags on the `k3s.service` unit made k3s upload
+its own snapshots. The cluster is Talos now, and the uploads come from three
+CronJobs in `kubernetes-homelab/manifests/etcd-backup/`, one per control plane
+node, every twelve hours. The buckets, the IAM split and the lifecycle rules are
+all unaffected, only the description of who writes into the bucket is out of
+date.
+
+## argocd-talos/
+
+A single `helm_release` for ArgoCD, and nothing else. It exists as its own stack
+rather than as a fourth file somewhere because the target cluster is decided by
+`var.kubeconfig_path`, which points at the `talosctl`-generated kubeconfig. That
+file can only reach the Talos cluster, which is the actual safeguard, and it is
+why an accidental apply cannot hit the wrong cluster.
+
+The root Application is deliberately *not* applied here: a `kubernetes_manifest`
+needs its CRD to exist at plan time, and the `Application` CRD only shows up once
+this release is installed. The `next_step` output prints the one `kubectl apply`
+that closes the loop.
 
 ## A note on the comments
 
