@@ -1,0 +1,152 @@
+#!/bin/sh
+#
+# Richtet Blocky und Unbound im LXC ein und haelt beide auf Stand. Laeuft auf
+# dem Proxmox-Host, nicht im Container, und spricht ihn ueber "pct" an: der
+# Container hat weder sshd noch cloud-init, und beides nur fuer die
+# Provisionierung nachzuziehen waere mehr Angriffsflaeche als Nutzen.
+#
+# Das Skript ist idempotent und laeuft bei jeder Aenderung an der
+# Blocky-Konfiguration erneut. Es installiert nur, was fehlt, und startet die
+# Dienste nur neu, wenn sich ihre Konfiguration wirklich geaendert hat.
+#
+# Terraform rendert diese Datei aus blocky/install.sh.tftpl.
+
+set -eu
+
+vmid="${vmid}"
+blocky_version="${blocky_version}"
+snippets="${snippets_dir}"
+
+log() { echo "[blocky-install] $*"; }
+
+# ---------------------------------------------------------------- Container
+# Nach einem "pct start" laeuft der Container zwar, hat aber noch keine Route.
+# Statt auf ein Netz-Symptom zu warten, wird die erste Aktion wiederholt, die
+# das Netz wirklich braucht.
+pct status "$vmid" | grep -q running || pct start "$vmid"
+
+i=0
+until pct exec "$vmid" -- apk update >/dev/null 2>&1; do
+  i=$((i + 1))
+  [ "$i" -lt 30 ] || { log "Container $vmid erreicht die apk-Spiegel nicht"; exit 1; }
+  sleep 2
+done
+
+# ------------------------------------------------------------------- Pakete
+#
+# node_exporter ist nicht dekorativ: er traegt ueber den Textfile-Collector das
+# Ergebnis des Config-Sync nach Prometheus. Ohne ihn waere ein dauerhaft
+# scheiterndes Sync unsichtbar, Blocky liefe stillschweigend mit altem Stand.
+pct exec "$vmid" -- apk add --no-cache unbound ca-certificates curl \
+  prometheus-node-exporter prometheus-node-exporter-openrc
+
+# -------------------------------------------------------------------- Blocky
+# Kein Alpine-Paket, also das Release-Binary. Statisch gelinktes Go, laeuft
+# damit auch gegen musl.
+#
+# Die installierte Version steht in einer Markierungsdatei und wird nicht aus
+# "blocky version" geparst: das Format der Ausgabe ist keine Zusage.
+installed=$(pct exec "$vmid" -- cat /etc/blocky/.version 2>/dev/null || true)
+if [ "$installed" = "$blocky_version" ] && pct exec "$vmid" -- test -x /usr/local/bin/blocky; then
+  log "Blocky $blocky_version ist installiert"
+else
+  log "Installiere Blocky $blocky_version"
+  url="https://github.com/0xERR0R/blocky/releases/download/$blocky_version/blocky_$${blocky_version}_Linux_x86_64.tar.gz"
+  pct exec "$vmid" -- sh -c "curl -fsSL '$url' -o /tmp/blocky.tar.gz \
+    && mkdir -p /etc/blocky \
+    && tar -xzf /tmp/blocky.tar.gz -C /usr/local/bin blocky \
+    && chmod 0755 /usr/local/bin/blocky \
+    && rm -f /tmp/blocky.tar.gz \
+    && printf '%s' '$blocky_version' > /etc/blocky/.version"
+  changed_binary=1
+fi
+changed_binary=$${changed_binary:-0}
+
+# ------------------------------------------------------------ Konfiguration
+pct exec "$vmid" -- mkdir -p /etc/blocky
+
+changed_blocky=0
+changed_unbound=0
+
+sync_file() {
+  src="$1"
+  dst="$2"
+  if ! pct exec "$vmid" -- test -f "$dst" || \
+     [ "$(md5sum "$src" | cut -d' ' -f1)" != "$(pct exec "$vmid" -- md5sum "$dst" | cut -d' ' -f1)" ]; then
+    pct push "$vmid" "$src" "$dst" --perms 0644
+    return 1
+  fi
+  return 0
+}
+
+# config.yml steht bewusst nicht in dieser Liste. Sie hat genau einen
+# Eigentuemer, und das ist der Sync-Job weiter unten, der sie aus dem
+# Cluster-Repo holt.
+sync_file "$snippets/blocky-unbound.conf" /etc/unbound/unbound.conf || changed_unbound=1
+
+# ------------------------------------------------------------ OpenRC-Dienste
+sync_file "$snippets/blocky-openrc.sh" /etc/init.d/blocky || changed_blocky=1
+pct exec "$vmid" -- chmod 0755 /etc/init.d/blocky
+
+changed_exporter=0
+sync_file "$snippets/blocky-node-exporter.confd" /etc/conf.d/node-exporter || changed_exporter=1
+
+# ----------------------------------------------------------------- Config-Sync
+# Nach /etc/periodic/15min, weil busybox-crond die Verzeichnisse ohnehin
+# abfaehrt: kein eigener Crontab-Eintrag, der beim naechsten Lauf doppelt
+# angelegt werden koennte. Die Viertelstunde ist zugleich der Abstand zur
+# Cluster-Instanz, die ArgoCD in Minuten nachzieht.
+pct exec "$vmid" -- mkdir -p /var/lib/node_exporter/textfile
+pct exec "$vmid" -- chmod 0755 /var/lib/node_exporter/textfile
+sync_file "$snippets/blocky-config-sync.sh" /etc/periodic/15min/blocky-config-sync || true
+pct exec "$vmid" -- chmod 0755 /etc/periodic/15min/blocky-config-sync
+pct exec "$vmid" -- rc-update add crond default
+
+# Trust Anchor fuer die DNSSEC-Pruefung. unbound-anchor legt die Datei beim
+# ersten Lauf an und aktualisiert sie danach per RFC 5011.
+pct exec "$vmid" -- sh -c 'mkdir -p /var/lib/unbound \
+  && unbound-anchor -a /var/lib/unbound/root.key || true'
+pct exec "$vmid" -- chown -R unbound:unbound /var/lib/unbound
+
+pct exec "$vmid" -- rc-update add unbound default
+pct exec "$vmid" -- rc-update add blocky default
+pct exec "$vmid" -- rc-update add node-exporter default
+
+if [ "$changed_exporter" -eq 1 ] || ! pct exec "$vmid" -- rc-service node-exporter status >/dev/null 2>&1; then
+  log "Starte node_exporter neu"
+  pct exec "$vmid" -- rc-service node-exporter restart
+fi
+
+# Unbound zuerst: Blocky haengt als einziger Upstream an ihm.
+if [ "$changed_unbound" -eq 1 ] || ! pct exec "$vmid" -- rc-service unbound status >/dev/null 2>&1; then
+  log "Starte Unbound neu"
+  pct exec "$vmid" -- rc-service unbound restart
+fi
+
+# Der Sync-Job holt die Konfiguration, prueft sie und startet Blocky, wenn sich
+# etwas geaendert hat. Ihn hier einmal von Hand anzustossen spart den Sonderweg
+# "beim ersten Mal anders": derselbe Code laeuft beim Aufsetzen und danach alle
+# 15 Minuten.
+log "Hole die Konfiguration aus dem Cluster-Repo"
+pct exec "$vmid" -- /etc/periodic/15min/blocky-config-sync
+
+if ! pct exec "$vmid" -- test -s /etc/blocky/config.yml; then
+  log "Keine Konfiguration im Container. Erreicht er raw.githubusercontent.com?"
+  exit 1
+fi
+
+if [ "$changed_blocky" -eq 1 ] || [ "$changed_binary" -eq 1 ] || \
+   ! pct exec "$vmid" -- rc-service blocky status >/dev/null 2>&1; then
+  log "Starte Blocky neu"
+  pct exec "$vmid" -- rc-service blocky restart
+fi
+
+# ---------------------------------------------------------------- Abnahme
+i=0
+until pct exec "$vmid" -- /usr/local/bin/blocky healthcheck >/dev/null 2>&1; do
+  i=$((i + 1))
+  [ "$i" -lt 30 ] || { log "Blocky antwortet nach 60s nicht"; exit 1; }
+  sleep 2
+done
+
+log "Blocky $blocky_version laeuft in CT $vmid"

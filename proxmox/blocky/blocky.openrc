@@ -1,0 +1,27 @@
+#!/sbin/openrc-run
+#
+# OpenRC-Dienst fuer Blocky. Alpine hat kein Blocky-Paket, das Binary kommt aus
+# dem GitHub-Release (siehe install.sh.tftpl).
+#
+# Blocky laeuft als root. Port 53 braeuchte sonst cap_net_bind_service als
+# Datei-Capability, und die ist in einem unprivilegierten LXC nicht verlaesslich
+# zu setzen. Der root im Container ist ueber die User-Namespace-Abbildung kein
+# root auf dem Host.
+
+name="blocky"
+description="Blocky DNS proxy and ad-blocker"
+
+command="/usr/local/bin/blocky"
+command_args="--config /etc/blocky/config.yml"
+command_background="yes"
+pidfile="/run/blocky.pid"
+output_log="/var/log/blocky.log"
+error_log="/var/log/blocky.log"
+
+depend() {
+    need net
+    # Einziger Upstream. Ohne Unbound beantwortet Blocky nichts ausser dem, was
+    # in seiner eigenen Konfiguration steht.
+    need unbound
+    after firewall
+}

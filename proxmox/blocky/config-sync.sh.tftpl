@@ -1,0 +1,125 @@
+#!/bin/sh
+#
+# Holt die Blocky-Konfiguration aus dem Cluster-Repo und wendet sie an. Laeuft
+# als cron-Job IM Container, nicht auf dem Proxmox-Host.
+#
+# Der Zweck: config.yml ist die gemeinsame Wahrheit beider Blocky-Instanzen.
+# Die Cluster-Instanz bekommt jede Aenderung von ArgoCD, ohne dass jemand etwas
+# tut. Ohne dieses Skript braeuchte die LXC dafuer ein "terraform apply" von
+# Hand, und die beiden Resolver liefen so lange auseinander, bis sich jemand
+# erinnert.
+#
+# Terraform legt das Skript ab und bleibt Eigentuemer des Containers, aber
+# nicht mehr seiner Konfiguration.
+#
+# Drei Sicherungen, weil beide Instanzen sonst gleichzeitig fallen koennten:
+#
+#   1. "blocky validate" laeuft VOR dem Neustart. Eine Konfiguration, die
+#      Blocky nicht annimmt, wird gar nicht erst eingebaut.
+#   2. Die laufende Fassung bleibt als .last-good liegen. Startet Blocky mit der
+#      neuen trotzdem nicht, rollt das Skript zurueck und startet erneut.
+#   3. Der Timer laeuft mit Abstand zur Cluster-Instanz. ArgoCD ist in Minuten
+#      dran, hier vergeht eine Viertelstunde: geht eine Aenderung schief, ist
+#      sie im Cluster sichtbar, waehrend hier noch der alte Stand laeuft.
+#
+# Terraform rendert diese Datei aus blocky/config-sync.sh.tftpl.
+
+set -eu
+
+# cron und "pct exec" bringen /usr/local/bin nicht mit, dort liegt aber das
+# Blocky-Binary. Ohne diese Zeile scheitert unten "blocky validate" mit "not
+# found", und das Skript haelt eine voellig gesunde Konfiguration fuer kaputt.
+PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+export PATH
+
+blocky=/usr/local/bin/blocky
+
+url="${config_url}"
+config=/etc/blocky/config.yml
+staging=/etc/blocky/config.yml.new
+lastgood=/etc/blocky/config.yml.last-good
+statefile=${textfile_dir}/blocky-config-sync.prom
+
+log() { logger -t blocky-config-sync "$*"; echo "[blocky-config-sync] $*"; }
+
+# Ergebnis des letzten Laufs als Prometheus-Textfile. Ohne das waere ein
+# dauerhaft scheiterndes Sync still: Blocky laeuft ja weiter, nur eben mit
+# altem Stand.
+write_state() {
+  mkdir -p "$(dirname "$statefile")"
+  cat > "$statefile.tmp" <<STATE
+# HELP blocky_config_sync_success Letzter Lauf des Config-Sync erfolgreich (1) oder nicht (0)
+# TYPE blocky_config_sync_success gauge
+blocky_config_sync_success $1
+# HELP blocky_config_sync_timestamp_seconds Zeitpunkt des letzten erfolgreichen Laufs
+# TYPE blocky_config_sync_timestamp_seconds gauge
+blocky_config_sync_timestamp_seconds $2
+STATE
+  mv "$statefile.tmp" "$statefile"
+}
+
+last_ts=$(awk '/^blocky_config_sync_timestamp_seconds /{print $2}' "$statefile" 2>/dev/null || true)
+last_ts=$${last_ts:-0}
+
+# ------------------------------------------------------------------- Abholen
+if ! curl -fsSL --max-time 30 "$url" -o "$staging"; then
+  log "Download fehlgeschlagen, behalte den laufenden Stand"
+  write_state 0 "$last_ts"
+  exit 0
+fi
+
+if [ -f "$config" ] && cmp -s "$staging" "$config"; then
+  rm -f "$staging"
+  write_state 1 "$(date +%s)"
+  exit 0
+fi
+
+# ------------------------------------------------------------------- Pruefen
+# Ein fehlendes Binary ist etwas anderes als eine kaputte Konfiguration und
+# darf nicht als solche gemeldet werden.
+if [ ! -x "$blocky" ]; then
+  log "$blocky fehlt, Sync abgebrochen"
+  rm -f "$staging"
+  write_state 0 "$last_ts"
+  exit 1
+fi
+
+# Sicherung 1. Blocky liest die Datei hier nur, es laeuft nichts an. Die
+# Fehlermeldung wird mitgeloggt, sonst steht im Journal nur "ungueltig".
+if ! validate_out=$("$blocky" validate --config "$staging" 2>&1); then
+  log "Neue Konfiguration ist ungueltig, sie wird NICHT eingebaut: $validate_out"
+  rm -f "$staging"
+  write_state 0 "$last_ts"
+  exit 1
+fi
+
+# ------------------------------------------------------------------ Anwenden
+log "Neue Konfiguration gefunden und gueltig, wende sie an"
+[ -f "$config" ] && cp "$config" "$lastgood"
+mv "$staging" "$config"
+
+# Nach dem Neustart lauscht Blocky nicht sofort auf Port 53: es laedt erst die
+# Blocklisten. Ohne diese Wartezeit meldet der Healthcheck einen Fehlstart und
+# die Sicherung unten rollt eine voellig gesunde Konfiguration zurueck.
+if rc-service blocky restart >/dev/null 2>&1; then
+  i=0
+  while [ "$i" -lt 30 ]; do
+    if "$blocky" healthcheck >/dev/null 2>&1; then
+      log "Blocky laeuft mit der neuen Konfiguration"
+      write_state 1 "$(date +%s)"
+      exit 0
+    fi
+    i=$((i + 1))
+    sleep 2
+  done
+fi
+
+# Sicherung 2. Gueltig heisst nicht lauffaehig: ein nicht erreichbarer Upstream
+# oder ein belegter Port faellt erst hier auf.
+log "Blocky kommt mit der neuen Konfiguration nicht hoch, rolle zurueck"
+if [ -f "$lastgood" ]; then
+  cp "$lastgood" "$config"
+  rc-service blocky restart >/dev/null 2>&1 || true
+fi
+write_state 0 "$last_ts"
+exit 1

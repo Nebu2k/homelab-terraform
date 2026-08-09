@@ -1,0 +1,11 @@
+# /etc/conf.d/node-exporter
+#
+# Der Textfile-Collector ist der Grund, warum auf diesem Container ueberhaupt
+# ein node_exporter laeuft: ohne ihn waere ein dauerhaft scheiterndes
+# Config-Sync unsichtbar. Blocky liefe einfach mit altem Stand weiter, und
+# genau das Auseinanderlaufen der beiden Instanzen soll das Sync ja verhindern.
+#
+# Dass damit auch CPU, Speicher und Disk des Containers sichtbar werden, ist
+# Mitnahme: die Host-Metriken landen im selben job=node-exporter wie pve und
+# macmini und damit in denselben Regeln und Dashboards.
+ARGS="--collector.textfile.directory=/var/lib/node_exporter/textfile"

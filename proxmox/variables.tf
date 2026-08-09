@@ -31,6 +31,12 @@ variable "proxmox_ssh_username" {
   default     = "root"
 }
 
+variable "proxmox_ssh_private_key" {
+  description = "Path to the SSH private key used to reach the Proxmox host (the provisioner cannot read ~/.ssh/config)"
+  type        = string
+  default     = "~/.ssh/homelab"
+}
+
 variable "proxmox_node" {
   description = "Proxmox node name where VMs will be created"
   type        = string
@@ -106,4 +112,33 @@ variable "talos_vm_network_bridge" {
   description = "Network bridge for Talos VMs"
   type        = string
   default     = "vmbr0"
+}
+
+# ============================================
+# Blocky LXC (zweite Resolver-Instanz)
+# ============================================
+
+variable "blocky_version" {
+  description = "Blocky release tag for the LXC instance (must match the image tag in kubernetes-homelab/manifests/blocky/deployment.yaml)"
+  type        = string
+  # renovate: datasource=github-releases depName=0xERR0R/blocky
+  default = "v0.34.0"
+}
+
+variable "blocky_config_url" {
+  description = "Raw URL of the shared Blocky config; the LXC pulls it every 15 minutes so a commit is enough to reach both instances"
+  type        = string
+  default     = "https://raw.githubusercontent.com/Nebu2k/kubernetes-homelab/main/manifests/blocky/config.yml"
+}
+
+variable "blocky_lxc_template" {
+  description = "Proxmox LXC template file name for the Blocky container"
+  type        = string
+  default     = "alpine-3.24-default_20260714_amd64.tar.xz"
+}
+
+variable "blocky_lxc_template_storage" {
+  description = "Storage pool holding the LXC template and the config snippets (needs content types vztmpl and snippets)"
+  type        = string
+  default     = "local"
 }

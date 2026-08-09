@@ -73,5 +73,16 @@
         '# renovate: datasource=(?<datasource>\\S+) depName=(?<depName>\\S+) registryUrl=(?<registryUrl>\\S+)\\s+default\\s*=\\s*"(?<currentValue>[^"]+)"',
       ],
     },
+    // Die Blocky-Version der LXC-Instanz. Sie muss zum Image-Tag der
+    // Cluster-Instanz passen (kubernetes-homelab, manifests/blocky/
+    // deployment.yaml); Renovate hebt beide unabhaengig voneinander an, der
+    // Gleichstand ist Sache des Applys.
+    {
+      customType: 'regex',
+      managerFilePatterns: ['proxmox/variables.tf'],
+      matchStrings: [
+        '# renovate: datasource=(?<datasource>\\S+) depName=(?<depName>\\S+)\\s+default\\s*=\\s*"(?<currentValue>[^"]+)"',
+      ],
+    },
   ],
 }
