@@ -1,11 +1,15 @@
 # Talos-Control-Plane-VMs (Cluster-Neubau)
 #
-# Drei VMs, die das neue Talos-Cluster parallel zum bestehenden k3s-Cluster
-# bootstrappen. Drei statt zwei, weil "talosctl upgrade" die Node rebootet: mit
-# einem einzelnen etcd-Member haengt jedes Upgrade am verlorenen Quorum.
+# Gestartet als drei VMs, die das neue Talos-Cluster parallel zum bestehenden
+# k3s-Cluster bootstrappen. Drei statt zwei, weil "talosctl upgrade" die Node
+# rebootet: mit einem einzelnen etcd-Member haengt jedes Upgrade am verlorenen
+# Quorum.
 #
-# Sie sind temporaer. Nach der Workload-Migration ersetzen prodesk und raspi5
-# zwei davon, eine bleibt Control-Plane, eine wird Worker, eine wird geloescht.
+# Seit dem 2026-08-09 sind es zwei. prodesk ist als Blech-Control-Plane (.23)
+# dazugekommen, damit waren es kurzzeitig vier etcd-Member. Eine gerade Anzahl
+# vertraegt nicht mehr Ausfaelle als drei, also ist talos-cp-3 (.22, vmid 112)
+# geloescht worden: erst drain, dann "talosctl reset --graceful", das laesst die
+# Node geordnet aus etcd austreten. Spaeter ersetzt raspi5 eine weitere.
 #
 # Bewusst NICHT ueber ./vm-module: das Modul ist auf cloud-init zugeschnitten
 # (User, Pakete, runcmd, snippets). Talos hat davon nichts, es gibt keine Shell
@@ -27,25 +31,27 @@ locals {
     # Stick im Spiel, und qemu findet ihn so nach einem Reset von selbst wieder.
     # Ein Portpfad waere nach dem naechsten Umstecken falsch.
     #
-    # Diese Node ist damit ein Pet. Sie ist deshalb die, die Schritt 7 der
-    # Migration ueberlebt: von den drei Start-VMs wird eine geloescht, das ist
-    # nicht diese. Wandert der Stick doch woanders hin, aendert sich hier die
-    # Zeile und in kubernetes-homelab/manifests/readsb/deployment.yaml der
-    # nodeSelector.
+    # Diese Node ist damit ein Pet. Sie ist deshalb die, die den Abbau der
+    # Start-VMs ueberlebt: geloescht wurde talos-cp-3, nicht diese. Wandert der
+    # Stick doch woanders hin, aendert sich hier die Zeile und in
+    # kubernetes-homelab/manifests/readsb/deployment.yaml der nodeSelector.
     #
     # ACHTUNG: das Hinzufuegen oder Entfernen eines usb-Blocks stoppt und
     # startet die VM. Nur bei gesundem etcd und nur an einer Node auf einmal.
     "talos-cp-1" = { vm_id = 110, ip = "192.168.2.20", usb_devices = ["0bda:2838"] }
     "talos-cp-2" = { vm_id = 111, ip = "192.168.2.21", usb_devices = [] }
-    "talos-cp-3" = { vm_id = 112, ip = "192.168.2.22", usb_devices = [] }
   }
 }
 
 # Talos-Image aus der Image Factory. Die Schematic-ID kodiert die System
 # Extensions (iscsi-tools und util-linux-tools fuer Longhorn, qemu-guest-agent
-# fuer Proxmox) und muss zu der in kubernetes-homelab/talos/talconfig.yaml
-# passen, sonst faellt die Node beim naechsten Upgrade auf ein Image ohne
-# Extensions zurueck und Longhorn verliert seine Volumes.
+# fuer Proxmox) und muss zu der passen, die in
+# kubernetes-homelab/talos/talconfig.yaml bei DIESEN VMs steht, sonst faellt die
+# Node beim naechsten Upgrade auf ein Image ohne Extensions zurueck und Longhorn
+# verliert seine Volumes.
+#
+# prodesk hat seit dem 2026-08-09 eine eigene Schematic ohne qemu-guest-agent,
+# die steht nur drueben. Diese Variable gilt ausschliesslich fuer die VMs.
 #
 # nocloud statt metal: das Image ist ein fertiges Disk-Image und wird direkt als
 # Boot-Disk geklont. Damit entfaellt der Umweg ueber eine ISO plus
