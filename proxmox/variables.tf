@@ -100,7 +100,19 @@ variable "talos_vm_cpu_cores" {
 variable "talos_vm_memory" {
   description = "Memory in MB per Talos control plane VM"
   type        = number
-  default     = 4096
+  # Am 2026-08-09 von 4096 auf 8192 erhoeht, nach dem Abschalten des
+  # k3s-Clusters: dessen beide VMs gaben 12 GB frei, und drei Talos-Nodes
+  # tragen jetzt, was vorher fuenf trugen. talos-cp-2 lag bei 90 Prozent
+  # Speicherbelegung, KubeMemoryOvercommit stand dauerhaft an.
+  #
+  # BEWUSST VORLAEUFIG: sobald raspi5 als Control-Plane joint und talos-cp-2
+  # ersetzt, bleibt hier nur noch eine VM uebrig und der Wert gehoert neu
+  # gerechnet. pve hat 30 GB gesamt.
+  #
+  # Eine Aenderung kostet je VM einen Stopp: Proxmox haengt Speicher ohne
+  # Ballooning nicht heiss an. Nacheinander, nie beide gleichzeitig, sonst
+  # faellt das etcd-Quorum.
+  default = 8192
 }
 
 variable "talos_vm_disk_size" {
