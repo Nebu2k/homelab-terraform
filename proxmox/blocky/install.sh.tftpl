@@ -83,6 +83,7 @@ sync_file() {
 # Eigentuemer, und das ist der Sync-Job weiter unten, der sie aus dem
 # Cluster-Repo holt.
 sync_file "$snippets/blocky-unbound.conf" /etc/unbound/unbound.conf || changed_unbound=1
+sync_file "$snippets/blocky-unbound.confd" /etc/conf.d/unbound || changed_unbound=1
 
 # ------------------------------------------------------------ OpenRC-Dienste
 sync_file "$snippets/blocky-openrc.sh" /etc/init.d/blocky || changed_blocky=1

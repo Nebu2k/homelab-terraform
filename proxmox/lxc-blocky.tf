@@ -64,6 +64,17 @@ resource "proxmox_virtual_environment_file" "blocky_unbound_config" {
   }
 }
 
+resource "proxmox_virtual_environment_file" "blocky_unbound_confd" {
+  content_type = "snippets"
+  datastore_id = var.blocky_lxc_template_storage
+  node_name    = var.proxmox_node
+
+  source_raw {
+    data      = file("${path.module}/blocky/unbound.confd")
+    file_name = "blocky-unbound.confd"
+  }
+}
+
 resource "proxmox_virtual_environment_file" "blocky_openrc" {
   content_type = "snippets"
   datastore_id = var.blocky_lxc_template_storage
@@ -214,6 +225,7 @@ resource "terraform_data" "blocky_provision" {
     container      = proxmox_virtual_environment_container.blocky.id
     blocky_version = var.blocky_version
     unbound_config = sha256(file("${path.module}/blocky/unbound.conf"))
+    unbound_confd  = sha256(file("${path.module}/blocky/unbound.confd"))
     openrc         = sha256(file("${path.module}/blocky/blocky.openrc"))
     config_sync    = sha256(file("${path.module}/blocky/config-sync.sh.tftpl"))
     node_exporter  = sha256(file("${path.module}/blocky/node-exporter.confd"))
@@ -222,6 +234,7 @@ resource "terraform_data" "blocky_provision" {
 
   depends_on = [
     proxmox_virtual_environment_file.blocky_unbound_config,
+    proxmox_virtual_environment_file.blocky_unbound_confd,
     proxmox_virtual_environment_file.blocky_openrc,
     proxmox_virtual_environment_file.blocky_config_sync,
     proxmox_virtual_environment_file.blocky_node_exporter_confd,

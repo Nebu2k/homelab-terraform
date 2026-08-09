@@ -1,0 +1,8 @@
+# /etc/conf.d/unbound
+#
+# Der Gurt zum Hosentraeger in unbound.conf (so-sndbuf: 0): schreibt Unbound
+# beim Start doch einmal etwas nach stderr, landet es in einer Datei statt an
+# einer Konsole, die es beim Booten nicht gibt. Ohne das kostet jede kuenftige
+# Startwarnung den Dienst, und zwar kommentarlos.
+error_log=/var/log/unbound-start.log
+output_log=/var/log/unbound-start.log
