@@ -100,19 +100,32 @@ variable "talos_vm_cpu_cores" {
 variable "talos_vm_memory" {
   description = "Memory in MB per Talos control plane VM"
   type        = number
-  # Am 2026-08-09 von 4096 auf 8192 erhoeht, nach dem Abschalten des
-  # k3s-Clusters: dessen beide VMs gaben 12 GB frei, und drei Talos-Nodes
-  # tragen jetzt, was vorher fuenf trugen. talos-cp-2 lag bei 90 Prozent
-  # Speicherbelegung, KubeMemoryOvercommit stand dauerhaft an.
+  # Am 2026-08-09 in zwei Schritten von 4096 ueber 8192 auf 16384. Der zweite
+  # Schritt ist die angekuendigte Neuberechnung: seit dem Abbau von talos-cp-2
+  # gilt diese Variable nur noch fuer EINE VM, talos-cp-1.
   #
-  # BEWUSST VORLAEUFIG: sobald raspi5 als Control-Plane joint und talos-cp-2
-  # ersetzt, bleibt hier nur noch eine VM uebrig und der Wert gehoert neu
-  # gerechnet. pve hat 30 GB gesamt.
+  # Der Wert ist nicht "was frei war", sondern der gemessene Ausfallfall. Faellt
+  # prodesk aus, muessen 6034 Mi umziehen (nur die beweglichen Pods, ohne
+  # DaemonSets und statische Control-Plane-Pods). Frei waren bei 8192 MB:
+  # raspi5 4396 Mi, talos-cp-1 3332 Mi, zusammen 7728 Mi. Es passte, aber ohne
+  # Reserve.
   #
-  # Eine Aenderung kostet je VM einen Stopp: Proxmox haengt Speicher ohne
-  # Ballooning nicht heiss an. Nacheinander, nie beide gleichzeitig, sonst
-  # faellt das etcd-Quorum.
-  default = 8192
+  # Entscheidend ist dabei nicht die Summe, sondern ein arch-Pin: Prometheus
+  # ist mit 1290 Mi der groesste bewegliche Pod und traegt
+  # kubernetes.io/arch: amd64 (begruendet in kubernetes-homelab, values.yaml
+  # der kube-prometheus-stack). raspi5 ist arm64 und kann ihn NICHT nehmen,
+  # egal wie viel dort frei ist. talos-cp-1 ist damit der einzige
+  # Ausweichplatz fuer den groessten Brocken, und deshalb bekommt genau er den
+  # Speicher.
+  #
+  # pve hat 30 GB gesamt und ausser dieser VM laeuft dort nichts mehr, es
+  # bleiben also rund 14 GB fuer den Host.
+  #
+  # Eine Aenderung kostet einen Stopp der VM: Proxmox haengt Speicher ohne
+  # Ballooning nicht heiss an. Bei mehreren VMs nacheinander, nie gleichzeitig,
+  # sonst faellt das etcd-Quorum. Und talos-cp-1 traegt den SDR: readsb und
+  # fr24 sind waehrend des Reboots offline, was FR24 verkraftet.
+  default = 16384
 }
 
 variable "talos_vm_disk_size" {
