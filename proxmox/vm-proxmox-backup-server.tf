@@ -74,17 +74,17 @@
 # output "pbs_connection_info" {
 #   description = "Proxmox Backup Server connection information"
 #   value       = <<-EOT
-  
+
 #   Proxmox Backup Server deployed successfully!
-  
+
 #   SSH Access (ubuntu user, key-only):
 #     ${module.proxmox_backup_server.ssh_command}
-  
+
 #   Web Interface:
 #     URL: https://${module.proxmox_backup_server.vm_ip}:8007
 #     User: root@pam
 #     Password: (set via TF_VAR_pbs_root_password)
-    
+
 #   First Steps:
 #     1. Access web interface at https://${module.proxmox_backup_server.vm_ip}:8007
 #     2. Login with root@pam and your configured password

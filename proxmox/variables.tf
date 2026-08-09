@@ -106,7 +106,21 @@ variable "talos_vm_memory" {
 variable "talos_vm_disk_size" {
   description = "Disk size in GB per Talos control plane VM (holds etcd and Longhorn replicas)"
   type        = number
-  default     = 128
+  # Am 2026-08-09 von 128 auf 400 erhoeht, vor der zweiten Migrationswelle.
+  #
+  # Longhorn schedult nur, solange 25 Prozent der Disk frei bleiben
+  # (storage-minimal-available-percentage), und ueberbucht nichts
+  # (over-provisioning 100). Aus 128 GB wurden damit 93 GiB nutzbar je VM, also
+  # 363 GiB im Cluster gegen 326 GiB Bedarf bei Replica 2. Zu wenig, sobald
+  # Snapshots dazukommen.
+  #
+  # Die Disks liegen auf nvme-2tb, das reichlich frei hat. Der Engpass auf pve
+  # ist der RAM, nicht die Platte: deshalb groessere Disks statt einer weiteren
+  # Worker-VM. Die kommt, wenn das k3s-Cluster seine 12 GB freigibt.
+  #
+  # Talos zieht die EPHEMERAL-Partition beim naechsten Boot selbst nach, ein
+  # Resize wird also erst mit einem Reboot wirksam.
+  default = 400
 }
 
 variable "talos_vm_storage" {
