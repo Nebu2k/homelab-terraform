@@ -39,8 +39,8 @@ variable "proxmox_node" {
 # ============================================
 # Talos Control Plane VMs
 # ============================================
-# Defaults statt tfvars-Eintraege: terraform.tfvars ist gitignored, ein Wert nur
-# dort waere fuer jeden anderen Klon des Repos verschwunden.
+# Werte stehen als default hier und nicht in terraform.tfvars: die tfvars ist
+# gitignored und waere fuer jeden anderen Klon des Repos leer.
 
 variable "talos_version" {
   description = "Talos version for the Image Factory download (must match kubernetes-homelab/talos/talconfig.yaml)"
@@ -63,51 +63,30 @@ variable "talos_vm_cpu_cores" {
 variable "talos_vm_memory" {
   description = "Memory in MB per Talos control plane VM"
   type        = number
-  # Am 2026-08-09 in zwei Schritten von 4096 ueber 8192 auf 16384. Der zweite
-  # Schritt ist die angekuendigte Neuberechnung: seit dem Abbau von talos-cp-2
-  # gilt diese Variable nur noch fuer EINE VM, talos-cp-1.
+  # Der Wert deckt den Ausfall einer der beiden Blech-Control-Planes ab: die
+  # beweglichen Pods von dort muessen auf die verbleibenden Nodes passen. Der
+  # groesste davon ist Prometheus, und der traegt einen arch-Selektor auf amd64
+  # (kubernetes-homelab, values.yaml der kube-prometheus-stack). Die arm64-Node
+  # kann ihn nicht nehmen, diese VM ist damit sein einziger Ausweichplatz.
   #
-  # Der Wert ist nicht "was frei war", sondern der gemessene Ausfallfall. Faellt
-  # prodesk aus, muessen 6034 Mi umziehen (nur die beweglichen Pods, ohne
-  # DaemonSets und statische Control-Plane-Pods). Frei waren bei 8192 MB:
-  # raspi5 4396 Mi, talos-cp-1 3332 Mi, zusammen 7728 Mi. Es passte, aber ohne
-  # Reserve.
-  #
-  # Entscheidend ist dabei nicht die Summe, sondern ein arch-Pin: Prometheus
-  # ist mit 1290 Mi der groesste bewegliche Pod und traegt
-  # kubernetes.io/arch: amd64 (begruendet in kubernetes-homelab, values.yaml
-  # der kube-prometheus-stack). raspi5 ist arm64 und kann ihn NICHT nehmen,
-  # egal wie viel dort frei ist. talos-cp-1 ist damit der einzige
-  # Ausweichplatz fuer den groessten Brocken, und deshalb bekommt genau er den
-  # Speicher.
-  #
-  # pve hat 30 GB gesamt und ausser dieser VM laeuft dort nichts mehr, es
-  # bleiben also rund 14 GB fuer den Host.
+  # Der Host hat 30 GB und traegt sonst keine VM mehr.
   #
   # Eine Aenderung kostet einen Stopp der VM: Proxmox haengt Speicher ohne
   # Ballooning nicht heiss an. Bei mehreren VMs nacheinander, nie gleichzeitig,
-  # sonst faellt das etcd-Quorum. Und talos-cp-1 traegt den SDR: readsb und
-  # fr24 sind waehrend des Reboots offline, was FR24 verkraftet.
+  # sonst faellt das etcd-Quorum. Diese Node traegt zudem den SDR, readsb und
+  # fr24 sind waehrend des Reboots offline.
   default = 16384
 }
 
 variable "talos_vm_disk_size" {
   description = "Disk size in GB per Talos control plane VM (holds etcd and Longhorn replicas)"
   type        = number
-  # Am 2026-08-09 von 128 auf 400 erhoeht, vor der zweiten Migrationswelle.
-  #
   # Longhorn schedult nur, solange 25 Prozent der Disk frei bleiben
-  # (storage-minimal-available-percentage), und ueberbucht nichts
-  # (over-provisioning 100). Aus 128 GB wurden damit 93 GiB nutzbar je VM, also
-  # 363 GiB im Cluster gegen 326 GiB Bedarf bei Replica 2. Zu wenig, sobald
-  # Snapshots dazukommen.
-  #
-  # Die Disks liegen auf nvme-2tb, das reichlich frei hat. Der Engpass auf pve
-  # ist der RAM, nicht die Platte: deshalb groessere Disks statt einer weiteren
-  # Worker-VM. Die kommt, wenn das k3s-Cluster seine 12 GB freigibt.
+  # (storage-minimal-available-percentage), und ueberbucht nicht
+  # (over-provisioning 100). Nutzbar sind davon also rund drei Viertel.
   #
   # Talos zieht die EPHEMERAL-Partition beim naechsten Boot selbst nach, ein
-  # Resize wird also erst mit einem Reboot wirksam.
+  # Resize wird erst mit einem Reboot wirksam.
   default = 400
 }
 

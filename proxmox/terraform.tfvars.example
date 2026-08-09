@@ -1,17 +1,15 @@
-# Vorlage fuer terraform.tfvars. Kopieren, Werte eintragen, fertig:
+# Vorlage fuer terraform.tfvars:
 #
 #   cp terraform.tfvars.example terraform.tfvars
 #
-# terraform.tfvars ist gitignored und wird nie committet.
+# terraform.tfvars ist gitignored.
 #
-# Hier stehen nur die Variablen OHNE Default. Alles andere, insbesondere die
-# Groesse und der Storage der Talos-VMs, ist in variables.tf hinterlegt und dort
-# auch begruendet. Bewusst so herum: ein Wert, der nur in dieser gitignoreten
-# Datei stuende, waere fuer jeden anderen Klon des Repos verschwunden.
+# Hier stehen nur die Variablen ohne Default. Alles andere, insbesondere Groesse
+# und Storage der Talos-VM, ist in variables.tf hinterlegt.
 
-proxmox_endpoint = "https://192.168.2.8:8006"
+proxmox_endpoint = "https://<proxmox-host>:8006"
 proxmox_node     = "proxmox"
 
-# Statt hier im Klartext geht auch die Umgebung, dann die Zeile weglassen:
+# Alternativ ueber die Umgebung, dann die Zeile weglassen:
 #   export TF_VAR_proxmox_password=...
 proxmox_password = "..."

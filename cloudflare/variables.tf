@@ -9,7 +9,7 @@ variable "cloudflare_api_token" {
 }
 
 variable "cloudflare_zone_id" {
-  description = "Cloudflare Zone ID for elmstreet79.de"
+  description = "Cloudflare Zone ID of the managed zone"
   type        = string
 }
 
@@ -29,9 +29,9 @@ variable "dyndns_target" {
   default     = "nebu2k.ipv64.net"
 }
 
-# Publicly exposed services. Each becomes a CNAME <name>.elmstreet79.de -> dyndns_target.
-# Everything NOT listed here has no public record and is reachable internally/VPN only
-# (split-horizon wildcard rewrite *.elmstreet79.de -> Traefik 192.168.2.250).
+# Publicly exposed services. Each becomes a CNAME <name>.<domain> -> dyndns_target.
+# Anything not listed here has no public record and resolves only internally,
+# through the split-horizon wildcard rewrite that points *.<domain> at Traefik.
 variable "public_hosts" {
   description = "Subdomains exposed to the internet via the single 80/443 port-forward"
   type        = set(string)
