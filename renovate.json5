@@ -1,0 +1,84 @@
+{
+  $schema: 'https://docs.renovatebot.com/renovate-schema.json',
+
+  extends: [
+    'config:recommended',
+    ':dependencyDashboard',
+  ],
+
+  timezone: 'Europe/Berlin',
+
+  // Bewusst KEIN "schedule:" hier. Wann Renovate laeuft, steuert allein der
+  // Cron in .github/workflows/renovate.yml, sonst taete ein manueller
+  // workflow_dispatch ausserhalb des Zeitfensters kommentarlos nichts.
+
+  semanticCommits: 'enabled',
+
+  // Wie im Repo kubernetes-homelab: der PR entsteht sofort und wartet nicht auf
+  // einen Branch-Status, den es hier gar nicht gibt.
+  prCreation: 'immediate',
+
+  // KEIN Automerge, und anders als drueben ist das hier keine Abwaegung,
+  // sondern zwingend: nichts in diesem Repo rollt sich selbst aus. Jeder Merge
+  // ist eine Notiz, die erst durch ein "terraform apply" von Hand wirksam wird.
+  // Ein automatisch gemergter PR wuerde nur den Plan von der Wirklichkeit
+  // entfernen.
+  automerge: false,
+
+  // Alles hier ist eine Erinnerung, kein Cluster-Zustand: "chore", damit klar
+  // ist, dass der Merge nichts ausgerollt hat.
+  packageRules: [
+    {
+      matchManagers: ['terraform'],
+      semanticCommitType: 'chore',
+      semanticCommitScope: 'deps',
+    },
+    {
+      matchManagers: ['github-actions'],
+      semanticCommitType: 'chore',
+      semanticCommitScope: 'ci',
+    },
+    // Der ArgoCD-Chart des Clusters. Frueher hing die Erinnerung daran an
+    // kubernetes-homelab/bootstrap/argocd-version.yaml, einer Datei, die von
+    // nichts ausgerollt wurde und nur als Anker existierte. Seit ArgoCD aus
+    // diesem Stack kommt, steht die Version dort, wo sie auch angewendet wird.
+    //
+    // Vor dem Apply eines Chart-Majors die Release Notes lesen und danach
+    // pruefen, dass argocd-cm die Keys accounts.readonly und
+    // timeout.reconciliation noch hat: das Chart liefert die ConfigMap mit,
+    // die App argocd-config patcht nur hinein.
+    {
+      matchPackageNames: ['argo-cd'],
+      semanticCommitType: 'chore',
+      semanticCommitScope: 'argocd',
+    },
+    // Der bpg-Provider ist die Schnittstelle zu Proxmox und damit zu den
+    // Cluster-VMs. Ein Major hier kann Ressourcen umbenennen, also nie ohne
+    // "terraform plan" gegen alle Stacks.
+    {
+      matchPackageNames: ['bpg/proxmox'],
+      semanticCommitType: 'chore',
+      semanticCommitScope: 'proxmox',
+    },
+  ],
+
+  // Die Provider stehen als Bereiche in required_providers (">= 5.0, < 7.0" und
+  // aehnlich). Renovate meldet sich damit erst, wenn eine neue Version den
+  // Bereich verlaesst, also genau bei einem Major. Das ist gewollt: Patches
+  // zieht "terraform init -upgrade" beim naechsten Apply ohnehin mit, ein PR
+  // dafuer waere Laerm.
+  //
+  // Lock-Dateien gibt es nicht, .terraform.lock.hcl ist gitignored.
+  customManagers: [
+    // Die argo-cd-Chart-Version steckt im default einer Variablen und ist damit
+    // fuer den terraform-Manager unsichtbar; er kennt nur required_providers
+    // und Module.
+    {
+      customType: 'regex',
+      managerFilePatterns: ['argocd-talos/variables.tf'],
+      matchStrings: [
+        '# renovate: datasource=(?<datasource>\\S+) depName=(?<depName>\\S+) registryUrl=(?<registryUrl>\\S+)\\s+default\\s*=\\s*"(?<currentValue>[^"]+)"',
+      ],
+    },
+  ],
+}
