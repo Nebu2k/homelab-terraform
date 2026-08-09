@@ -38,8 +38,12 @@ locals {
     #
     # ACHTUNG: das Hinzufuegen oder Entfernen eines usb-Blocks stoppt und
     # startet die VM. Nur bei gesundem etcd und nur an einer Node auf einmal.
+    #
+    # talos-cp-2 (vmid 111, .21) stand hier bis zum 2026-08-09 und ist von
+    # raspi5 ersetzt worden. Damit ist dies die einzige verbliebene Talos-VM:
+    # von den drei etcd-Membern sitzt nur noch dieser auf pve, prodesk und
+    # raspi5 sind Blech. Die .21 ist wieder frei.
     "talos-cp-1" = { vm_id = 110, ip = "192.168.2.20", usb_devices = ["0bda:2838"] }
-    "talos-cp-2" = { vm_id = 111, ip = "192.168.2.21", usb_devices = [] }
   }
 }
 
