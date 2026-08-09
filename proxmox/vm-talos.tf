@@ -60,7 +60,13 @@ locals {
 # nocloud statt metal: das Image ist ein fertiges Disk-Image und wird direkt als
 # Boot-Disk geklont. Damit entfaellt der Umweg ueber eine ISO plus
 # Installationslauf, die VM bootet sofort in den Maintenance-Mode.
-resource "proxmox_virtual_environment_download_file" "talos_nocloud_image" {
+#
+# Hiess bis zum 2026-08-09 proxmox_virtual_environment_download_file. Der Typ ist
+# ab v1.0.0 des Providers weg, der neue Name ist ein reiner Alias: die Schemata
+# beider Typen unterscheiden sich ausschliesslich im deprecated-Flag. Umgezogen
+# per "terraform state mv" statt per destroy, ein Neuanlegen haette das Image auf
+# local geloescht und neu geladen.
+resource "proxmox_download_file" "talos_nocloud_image" {
   content_type            = "iso"
   datastore_id            = var.talos_image_storage
   node_name               = var.proxmox_node
@@ -105,7 +111,7 @@ resource "proxmox_virtual_environment_vm" "talos" {
     file_format  = "raw"
     discard      = "on"
     ssd          = true
-    file_id      = proxmox_virtual_environment_download_file.talos_nocloud_image.id
+    file_id      = proxmox_download_file.talos_nocloud_image.id
   }
 
   network_device {

@@ -3,8 +3,11 @@ terraform {
 
   required_providers {
     proxmox = {
-      source  = "bpg/proxmox"
-      version = ">= 0.93.0, < 1.0.0"
+      source = "bpg/proxmox"
+      # Untergrenze am 2026-08-09 von 0.93.0 angehoben: seit dem Umbenennen auf
+      # proxmox_download_file braucht dieser Stack eine Version, die den neuen
+      # Typ ueberhaupt kennt. 0.111.1 ist die, gegen die es geprueft ist.
+      version = ">= 0.111.1, < 1.0.0"
     }
   }
 }
