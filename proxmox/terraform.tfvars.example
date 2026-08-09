@@ -1,32 +1,17 @@
-# Example Terraform Variables File
-# Copy this file to terraform.tfvars and fill in your actual values
-# terraform.tfvars is gitignored and will not be committed
+# Vorlage fuer terraform.tfvars. Kopieren, Werte eintragen, fertig:
+#
+#   cp terraform.tfvars.example terraform.tfvars
+#
+# terraform.tfvars ist gitignored und wird nie committet.
+#
+# Hier stehen nur die Variablen OHNE Default. Alles andere, insbesondere die
+# Groesse und der Storage der Talos-VMs, ist in variables.tf hinterlegt und dort
+# auch begruendet. Bewusst so herum: ein Wert, der nur in dieser gitignoreten
+# Datei stuende, waere fuer jeden anderen Klon des Repos verschwunden.
 
-# ============================================
-# Proxmox Connection
-# ============================================
-proxmox_endpoint    = "https://192.168.2.8:8006"
-proxmox_username    = "root@pam"
-# proxmox_password: Set via TF_VAR_proxmox_password env var in ~/.zshrc
-proxmox_insecure    = true
-proxmox_node        = "proxmox"
+proxmox_endpoint = "https://192.168.2.8:8006"
+proxmox_node     = "proxmox"
 
-# ============================================
-# Global VM Defaults
-# ============================================
-snippet_storage     = "local"  # Must support snippets (directory-based storage)
-ssh_public_key      = "ssh-ed25519 AAAAC3Nza... your-key-here"
-
-# ============================================
-# Application Credentials
-# ============================================
-minio_root_user     = "minio-admin"
-# minio_root_password: Set via TF_VAR_minio_root_password env var in ~/.zshrc
-# pbs_root_password: Set via TF_VAR_pbs_root_password env var in ~/.zshrc (Proxmox Backup Server VM root@pam)
-
-# ============================================
-# VM-specific configuration is now in vms/*.tf
-# ============================================
-# Each VM has its own file in the vms/ directory with all parameters.
-# See vms/minio-backup.tf for an example.
-# Copy vms/example-vm.tf.example to create new VMs.
+# Statt hier im Klartext geht auch die Umgebung, dann die Zeile weglassen:
+#   export TF_VAR_proxmox_password=...
+proxmox_password = "..."

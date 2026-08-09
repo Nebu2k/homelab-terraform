@@ -37,43 +37,6 @@ variable "proxmox_node" {
 }
 
 # ============================================
-# Global VM Defaults (passed to vm-module)
-# ============================================
-
-variable "snippet_storage" {
-  description = "Storage pool for cloud-init snippets (must support snippets, e.g., 'local')"
-  type        = string
-  default     = "local"
-}
-
-variable "ssh_public_key" {
-  description = "SSH public key for VM access"
-  type        = string
-}
-
-# ============================================
-# Application-Specific Variables
-# ============================================
-
-variable "minio_root_user" {
-  description = "MinIO root username"
-  type        = string
-  default     = "minio-admin"
-}
-
-variable "minio_root_password" {
-  description = "MinIO root password"
-  type        = string
-  sensitive   = true
-}
-
-variable "pbs_root_password" {
-  description = "Proxmox Backup Server root@pam password (for web interface)"
-  type        = string
-  sensitive   = true
-}
-
-# ============================================
 # Talos Control Plane VMs
 # ============================================
 # Defaults statt tfvars-Eintraege: terraform.tfvars ist gitignored, ein Wert nur
