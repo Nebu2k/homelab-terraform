@@ -29,3 +29,10 @@ terraform.rc
 # OS
 .DS_Store
 Thumbs.db
+
+# Talos: generated machine configs and the talosconfig carry the cluster CAs in
+# plaintext. This repo is public, they must never go in. Mirrors the rule in
+# kubernetes-homelab.
+talos/clusterconfig/
+talosconfig
+**/clusterconfig/
