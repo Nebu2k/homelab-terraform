@@ -95,3 +95,39 @@ variable "home_assistant_archive_prefix" {
   type        = string
   default     = "Monthly"
 }
+
+variable "mealie_bucket" {
+  description = "Bucket mit den ZIPs aus Mealies eingebautem Backup"
+  type        = string
+  default     = "homelab-mealie-backup"
+}
+
+variable "mealie_daily_prefix" {
+  description = "Key-Praefix der taeglichen Mealie-Backups"
+  type        = string
+  default     = "daily/"
+}
+
+variable "mealie_monthly_prefix" {
+  description = "Key-Praefix der monatlichen Mealie-Backups"
+  type        = string
+  default     = "monthly/"
+}
+
+variable "mealie_daily_days" {
+  description = "Aufbewahrung der taeglichen Mealie-Backups"
+  type        = number
+  default     = 30
+}
+
+variable "mealie_monthly_days" {
+  description = "Aufbewahrung der monatlichen Mealie-Backups"
+  type        = number
+  default     = 365
+}
+
+variable "mealie_noncurrent_days" {
+  description = "Aufbewahrung ueberschriebener Mealie-Backups als noncurrent version"
+  type        = number
+  default     = 30
+}

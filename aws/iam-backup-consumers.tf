@@ -311,7 +311,59 @@ resource "aws_iam_user_policy_attachment" "etcd_backup" {
 }
 
 # ===========================================
-# Frische-Sonde ueber alle vier Buckets
+# mealie
+# ===========================================
+
+# Konsument ist der CronJob "mealie-backup"
+# (kubernetes-homelab/manifests/mealie/backup-cronjob.yaml), Secret
+# "s3-mealie-backup-credentials" im Namespace mealie.
+resource "aws_iam_user" "mealie_backup" {
+  name = "homelab-mealie-backup"
+
+  tags = {
+    Name      = "mealie-offsite-backup"
+    ManagedBy = "terraform"
+  }
+}
+
+resource "aws_iam_policy" "mealie_backup" {
+  name        = "mealie-backup"
+  path        = "/homelab/"
+  description = "Schreibzugriff des Mealie-Backup-CronJobs auf genau seinen Bucket"
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid      = "ListOwnBucket"
+        Effect   = "Allow"
+        Action   = ["s3:ListBucket"]
+        Resource = [aws_s3_bucket.mealie.arn]
+      },
+      {
+        Sid    = "ReadWriteOwnObjects"
+        Effect = "Allow"
+        Action = [
+          "s3:PutObject",
+          "s3:GetObject",
+          "s3:AbortMultipartUpload",
+        ]
+        Resource = ["${aws_s3_bucket.mealie.arn}/*"]
+      },
+    ]
+  })
+}
+
+# Kein DeleteObject: aufgeraeumt wird ausschliesslich durch die Lifecycle-Regeln,
+# und die laufen AWS-seitig ohne diesen Key. Das ZIP im Mealie-Pod raeumt der Job
+# ueber Mealies eigene API weg, nicht ueber S3.
+resource "aws_iam_user_policy_attachment" "mealie_backup" {
+  user       = aws_iam_user.mealie_backup.name
+  policy_arn = aws_iam_policy.mealie_backup.arn
+}
+
+# ===========================================
+# Frische-Sonde ueber alle Backup-Buckets
 # ===========================================
 
 # Konsument ist der CronJob "offsite-backup-freshness"
@@ -319,7 +371,7 @@ resource "aws_iam_user_policy_attachment" "etcd_backup" {
 # "s3-backup-monitor-credentials" im Namespace monitoring. Er prueft je Bucket
 # und je Praefix, ob dort ein hinreichend junges Objekt liegt.
 #
-# Es ist der einzige User mit Zugriff auf alle vier Buckets und zugleich der
+# Es ist der einzige User mit Zugriff auf alle Backup-Buckets und zugleich der
 # einzige, der darin nichts tun darf ausser aufzulisten.
 resource "aws_iam_user" "backup_monitor" {
   name = "homelab-backup-monitor"
@@ -355,6 +407,7 @@ resource "aws_iam_policy" "backup_monitor" {
           aws_s3_bucket.home_assistant.arn,
           aws_s3_bucket.teslamate.arn,
           aws_s3_bucket.etcd_snapshots.arn,
+          aws_s3_bucket.mealie.arn,
         ]
       },
     ]

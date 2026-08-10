@@ -17,6 +17,10 @@ output "backup_buckets" {
       versioning = aws_s3_bucket_versioning.etcd_snapshots.versioning_configuration[0].status
       retention  = "Lifecycle ${var.etcd_snapshot_days} Tage, noncurrent ${var.etcd_snapshot_noncurrent_days} Tage"
     }
+    (var.mealie_bucket) = {
+      versioning = aws_s3_bucket_versioning.mealie.versioning_configuration[0].status
+      retention  = "'${var.mealie_daily_prefix}' ${var.mealie_daily_days} Tage, '${var.mealie_monthly_prefix}' ${var.mealie_monthly_days} Tage, noncurrent ${var.mealie_noncurrent_days} Tage"
+    }
   }
 }
 
@@ -32,5 +36,6 @@ output "backup_consumer_users" {
     (aws_iam_user.home_assistant_archive.name) = "Secret s3-archive-credentials, Namespace home-assistant"
     (aws_iam_user.backup_monitor.name)         = "Secret s3-backup-monitor-credentials, Namespace monitoring"
     (aws_iam_user.etcd_backup.name)            = "Secret etcd-backup-s3, Namespace kube-system"
+    (aws_iam_user.mealie_backup.name)          = "Secret s3-mealie-backup-credentials, Namespace mealie"
   }
 }
