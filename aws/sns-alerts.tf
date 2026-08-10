@@ -1,15 +1,15 @@
-# Der Alarmweg des Homelabs: der Alertmanager im Cluster publisht in dieses
-# Topic, SNS stellt per Mail zu. Es ist der einzige Weg, Gatus und Grafana
-# alarmieren bewusst nicht selbst.
+# The alert path of the homelab: the Alertmanager in the cluster publishes
+# into this topic, SNS delivers by mail. It is the only path, Gatus and Grafana
+# deliberately do not alert on their own.
 #
-# Topic und Subscription sind aelter als dieser Stack und wurden importiert:
+# Topic and subscription are older than this stack and were imported:
 #
 #   terraform import aws_sns_topic.alerts <topic-arn>
 #   terraform import aws_sns_topic_subscription.alerts_email <subscription-arn>
 #
-# Die Bootstrap-Policy "terraform-homelab-iam" (von Hand gepflegt, siehe
-# iam-backup-consumers.tf) braucht dafuer SNS-Rechte. Fehlen sie, scheitert
-# schon der plan mit AuthorizationError bei GetTopicAttributes.
+# The bootstrap policy "terraform-homelab-iam" (maintained by hand, see
+# iam-backup-consumers.tf) needs SNS permissions for this. Without them even
+# the plan fails with AuthorizationError on GetTopicAttributes.
 
 resource "aws_sns_topic" "alerts" {
   name = var.alerts_topic_name
@@ -24,15 +24,15 @@ resource "aws_sns_topic" "alerts" {
   }
 }
 
-# Eine email-Subscription entsteht als "PendingConfirmation" und wird erst
-# aktiv, wenn jemand den Link in der Bestaetigungsmail klickt. Terraform kann
-# darauf nicht warten und eine unbestaetigte auch nicht wieder loeschen, es
-# nimmt sie dann nur aus dem State. Diese hier ist bestaetigt und importiert.
+# An email subscription starts out as "PendingConfirmation" and only becomes
+# active once someone clicks the link in the confirmation mail. Terraform
+# cannot wait for that, and cannot delete an unconfirmed one either, it only
+# drops it from the state. This one is confirmed and imported.
 #
-# "endpoint" ist ForceNew: eine geaenderte Adresse ersetzt die Subscription
-# durch eine unbestaetigte. Bis zur Bestaetigung laufen Alarme ins Leere, ohne
-# dass irgendwo etwas fehlschlaegt. Deshalb prevent_destroy, eine Aenderung
-# hier soll im plan anschlagen statt durchzulaufen.
+# "endpoint" is ForceNew: a changed address replaces the subscription with an
+# unconfirmed one. Until it is confirmed, alerts go nowhere without anything
+# failing anywhere. Hence prevent_destroy, a change here should trip the plan
+# rather than run through.
 resource "aws_sns_topic_subscription" "alerts_email" {
   topic_arn = aws_sns_topic.alerts.arn
   protocol  = "email"
@@ -43,11 +43,11 @@ resource "aws_sns_topic_subscription" "alerts_email" {
   }
 }
 
-# Konsument ist der Alertmanager (kubernetes-homelab/manifests/
-# kube-prometheus-stack/values.yaml), Secret "alertmanager-aws-credentials" im
-# Namespace monitoring. Wie bei den Backup-Konsumenten entsteht der Access Key
-# in der Konsole und kommt per kubeseal ins Cluster, es gibt auch hier keine
-# aws_iam_access_key-Ressource.
+# The consumer is the Alertmanager (kubernetes-homelab/manifests/
+# kube-prometheus-stack/values.yaml), secret "alertmanager-aws-credentials" in
+# the monitoring namespace. As with the backup consumers, the access key is
+# created in the console and brought into the cluster with kubeseal, so there
+# is no aws_iam_access_key resource here either.
 resource "aws_iam_user" "alertmanager" {
   name = "homelab-alertmanager"
 
@@ -57,8 +57,8 @@ resource "aws_iam_user" "alertmanager" {
   }
 }
 
-# Nur sns:Publish auf genau dieses Topic. Der Alertmanager abonniert nichts und
-# liest nichts zurueck.
+# Only sns:Publish on exactly this topic. The Alertmanager subscribes to
+# nothing and reads nothing back.
 resource "aws_iam_policy" "alertmanager_sns" {
   name        = "alertmanager-sns"
   path        = "/homelab/"

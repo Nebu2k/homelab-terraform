@@ -90,13 +90,14 @@ lets it coexist with the MX and TXT records, so the mail setup stays untouched.
 
 ## aws/
 
-Offsite backups for four consumers, one bucket each, all in `eu-central-1`, all
+Offsite backups for five consumers, one bucket each, all in `eu-central-1`, all
 with public access blocked, SSE-S3 (AES256) and lifecycle rules:
 
 | Bucket | Contents | Versioning | Retention |
 | ------ | -------- | ---------- | --------- |
 | `homelab-etcd-snapshots-*` | etcd snapshots from the three control plane nodes | Enabled | lifecycle 30 days, noncurrent 30 days |
 | `homelab-teslamate-backup` | `pg_dump` of the Teslamate database | Enabled | `daily/` 30 days, `monthly/` 365 days |
+| `homelab-mealie-backup` | ZIPs from Mealie's built-in backup (database and recipe images) | Enabled | `daily/` 30 days, `monthly/` 365 days |
 | `homelab-homeassistent-*` | Home Assistant backup tars | Disabled | HA drives its own depth, monthly archive 180 days |
 | `homelab-paperless-backup` | paperless-ngx `document_exporter` output | Enabled | none, multipart abort only |
 

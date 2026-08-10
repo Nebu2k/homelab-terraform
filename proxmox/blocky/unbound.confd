@@ -1,8 +1,8 @@
 # /etc/conf.d/unbound
 #
-# Der Gurt zum Hosentraeger in unbound.conf (so-sndbuf: 0): schreibt Unbound
-# beim Start doch einmal etwas nach stderr, landet es in einer Datei statt an
-# einer Konsole, die es beim Booten nicht gibt. Ohne das kostet jede kuenftige
-# Startwarnung den Dienst, und zwar kommentarlos.
+# Belt to the braces in unbound.conf (so-sndbuf: 0): if Unbound does write
+# something to stderr at startup after all, it lands in a file rather than at
+# a console, which does not exist at boot time. Without this, every future
+# startup warning costs the service, silently.
 error_log=/var/log/unbound-start.log
 output_log=/var/log/unbound-start.log

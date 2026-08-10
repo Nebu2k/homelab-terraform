@@ -1,39 +1,39 @@
-# Zweite Blocky-Instanz als LXC auf dem Proxmox-Host.
+# Second Blocky instance as an LXC on the Proxmox host.
 #
-# Die erste laeuft im Cluster (kubernetes-homelab/manifests/blocky/). Die beiden
-# decken einander komplementaer ab: stirbt pve, laufen raspi5 und prodesk weiter
-# und damit die Cluster-Instanz. Hakt das Cluster, lebt diese hier. Ein Resolver
-# an nur einer der beiden Stellen waere ein Single Point of Failure fuers ganze
-# Haus.
+# The first one runs in the cluster (kubernetes-homelab/manifests/blocky/).
+# The two cover each other complementarily: if pve dies, raspi5 and prodesk
+# keep running and with them the cluster instance. If the cluster stalls, this
+# one lives. A resolver in only one of the two places would be a single point
+# of failure for the whole house.
 #
-# LXC und keine VM: Blocky ist ein statisches Go-Binary und Unbound ein
-# Alpine-Paket. Eine VM waere fuer beides Verschwendung.
+# LXC and not a VM: Blocky is a static Go binary and Unbound an Alpine
+# package. A VM would be wasteful for both.
 #
-# WICHTIG bei der statischen ULA: vmbr0 braucht "bridge-mcsnoop 0". MLD-Snooping
-# ohne Querier laesst statische IPv6-Adressen in Containern nach Minuten
-# verschwinden.
+# IMPORTANT for the static ULA: vmbr0 needs "bridge-mcsnoop 0". MLD snooping
+# without a querier makes static IPv6 addresses in containers disappear after
+# minutes.
 
 locals {
   blocky_lxc = {
     vm_id = 402
-    # Nachbaradresse der Cluster-Instanz (.253, MetalLB). Zusammenhaengend, damit
-    # beide Resolver im UniFi-DHCP nebeneinander stehen. Die .254 liegt
-    # ausserhalb des MetalLB-Pools (.240-.253), es gibt also keine Kollision.
+    # Neighbouring address of the cluster instance (.253, MetalLB). Adjacent so
+    # both resolvers sit next to each other in the UniFi DHCP settings. The
+    # .254 is outside the MetalLB pool (.240-.253), so there is no collision.
     ipv4_address = "192.168.2.254/24"
     ipv4_gateway = "192.168.2.1"
-    # Ohne v6-Pool in MetalLB kann die Cluster-Instanz keine v6-Adresse
-    # anbieten. Das v6-DNS-Feld in UniFi haengt damit allein an dieser Instanz.
-    # Die Adresse gehoert zusaetzlich in die UniFi-IP-Liste "HomeLab IPv6
-    # Adguard", sonst faellt v6-DNS fuer die Gast-VLANs still aus.
+    # Without a v6 pool in MetalLB the cluster instance cannot offer a v6
+    # address. The v6 DNS field in UniFi therefore hangs off this instance
+    # alone. The address additionally belongs in the UniFi IP list "HomeLab
+    # IPv6 Adguard", otherwise v6 DNS fails silently for the guest VLANs.
     ipv6_address = "fd2e:9a71:c3b5::254/64"
   }
 
   blocky_snippets_dir = "/var/lib/vz/snippets"
 }
 
-# Das Alpine-Template. Terraform laedt es selbst herunter, statt ein von Hand
-# per "pveam download" geholtes zu benutzen: sonst steht die Version nirgends im
-# Code und ein frischer Host hat sie nicht.
+# The Alpine template. Terraform downloads it itself rather than using one
+# fetched by hand via "pveam download": otherwise the version is nowhere in
+# the code and a fresh host does not have it.
 resource "proxmox_download_file" "alpine_lxc_template" {
   content_type        = "vztmpl"
   datastore_id        = var.blocky_lxc_template_storage
@@ -44,14 +44,14 @@ resource "proxmox_download_file" "alpine_lxc_template" {
   overwrite_unmanaged = true
 }
 
-# Die Blocky-Konfiguration selbst steht bewusst NICHT hier. Sie liegt im
-# Cluster-Repo (manifests/blocky/config.yml) und der Container holt sie sich im
-# Viertelstundentakt selbst, siehe blocky_config_sync weiter unten. Terraform
-# besitzt den Container, nicht seinen Inhalt.
+# The Blocky configuration itself deliberately does NOT live here. It sits in
+# the cluster repo (manifests/blocky/config.yml) and the container fetches it
+# every quarter of an hour on its own, see blocky_config_sync further down.
+# Terraform owns the container, not its content.
 #
-# Wuerde Terraform sie zusaetzlich hineinschieben, haette dieselbe Datei zwei
-# Eigentuemer: ein apply mit nicht committeten Aenderungen wuerde etwas
-# ausrollen, das der Sync eine Viertelstunde spaeter wieder zurueckdreht.
+# If Terraform pushed it in as well, the same file would have two owners: an
+# apply with uncommitted changes would roll out something the sync reverts a
+# quarter of an hour later.
 
 resource "proxmox_virtual_environment_file" "blocky_unbound_config" {
   content_type = "snippets"
@@ -86,15 +86,15 @@ resource "proxmox_virtual_environment_file" "blocky_openrc" {
   }
 }
 
-# Holt config.yml im Viertelstundentakt selbst aus dem Cluster-Repo. Damit ist
-# ein "terraform apply" nur noch fuer den Container noetig, nicht mehr fuer
-# seine Konfiguration: ein Commit reicht, und beide Instanzen folgen. Die drei
-# Sicherungen gegen einen gleichzeitigen Ausfall beider Resolver stehen im Kopf
-# des Skripts.
+# Fetches config.yml from the cluster repo every quarter of an hour on its
+# own. That makes a "terraform apply" necessary only for the container, no
+# longer for its configuration: a commit is enough and both instances follow.
+# The three safeguards against both resolvers failing at once are in the head
+# of the script.
 #
-# Die URL zeigt bewusst auf main und nicht auf einen Tag: ArgoCD zieht fuer die
-# Cluster-Instanz denselben Branch. Zwei verschiedene Staende waeren genau das
-# Auseinanderlaufen, das hier verhindert werden soll.
+# The URL deliberately points at main and not at a tag: ArgoCD pulls the same
+# branch for the cluster instance. Two different states would be exactly the
+# drift this is meant to prevent.
 resource "proxmox_virtual_environment_file" "blocky_config_sync" {
   content_type = "snippets"
   datastore_id = var.blocky_lxc_template_storage
@@ -138,7 +138,7 @@ resource "proxmox_virtual_environment_file" "blocky_install_script" {
 resource "proxmox_virtual_environment_container" "blocky" {
   node_name   = var.proxmox_node
   vm_id       = local.blocky_lxc.vm_id
-  description = "Blocky + Unbound (${split("/", local.blocky_lxc.ipv4_address)[0]}), Konfiguration in kubernetes-homelab/manifests/blocky/"
+  description = "Blocky + Unbound (${split("/", local.blocky_lxc.ipv4_address)[0]}), configuration in kubernetes-homelab/manifests/blocky/"
   tags        = ["blocky", "dns", "terraform"]
 
   unprivileged  = true
@@ -150,16 +150,16 @@ resource "proxmox_virtual_environment_container" "blocky" {
   }
 
   memory {
-    # Der Speicher haengt an den Blocklisten: HaGeZi Pro sind rund 215k
-    # Eintraege. Mit Unbound-Cache daneben ist 1 GB die Groesse, bei der noch
-    # Luft fuer eine groessere Liste bleibt.
+    # Memory hangs off the blocklists: HaGeZi Pro is around 215k entries. With
+    # the Unbound cache next to it, 1 GB is the size that leaves room for a
+    # larger list.
     dedicated = 1024
     swap      = 512
   }
 
   disk {
-    # local-lvm und nicht nvme-2tb: dort liegen nur worker-1 und vm-arch, und
-    # der Container braucht keine 8 GB schnellen Speicher.
+    # local-lvm and not nvme-2tb: only worker-1 and vm-arch live there, and the
+    # container does not need 8 GB of fast storage.
     datastore_id = "local-lvm"
     size         = 8
   }
@@ -178,19 +178,19 @@ resource "proxmox_virtual_environment_container" "blocky" {
         gateway = local.blocky_lxc.ipv4_gateway
       }
       ipv6 {
-        # Kein Gateway noetig: der Container nimmt die Router Advertisements
-        # von vmbr0 an und holt sich Default-Route, ISP-GUA und die
-        # SLAAC-Adressen der ULA von selbst dazu. Diese statische Adresse
-        # kommt oben drauf und existiert nur, damit im UniFi-DNS-Feld etwas
-        # steht, das der rotierende ISP-Praefix nicht wegreisst.
+        # No gateway needed: the container accepts the router advertisements
+        # from vmbr0 and picks up the default route, the ISP GUA and the SLAAC
+        # addresses of the ULA by itself. This static address comes on top and
+        # exists only so the UniFi DNS field holds something the rotating ISP
+        # prefix cannot tear away.
         address = local.blocky_lxc.ipv6_address
       }
     }
 
-    # Der Resolver des Containers selbst zeigt auf das UniFi-Gateway, nicht auf
-    # sich selbst und nicht auf AdGuard. Auf sich selbst waere ein Henne-Ei bei
-    # jedem Kaltstart (apk braucht DNS, bevor Blocky laeuft), auf AdGuard eine
-    # Abhaengigkeit von genau dem Dienst, den diese Instanz abloest.
+    # The container's own resolver points at the UniFi gateway, not at itself
+    # and not at AdGuard. At itself would be a chicken and egg on every cold
+    # start (apk needs DNS before Blocky runs), at AdGuard a dependency on
+    # exactly the service this instance replaces.
     dns {
       servers = [local.blocky_lxc.ipv4_gateway]
     }
@@ -203,23 +203,23 @@ resource "proxmox_virtual_environment_container" "blocky" {
 
   lifecycle {
     ignore_changes = [
-      # Ein manuelles Stoppen soll ein apply ueberleben, sonst startet
-      # Terraform den Container mitten in einer Fehlersuche wieder.
+      # Stopping it by hand should survive an apply, otherwise Terraform
+      # starts the container again in the middle of a debugging session.
       started,
     ]
   }
 }
 
-# Installiert Blocky und Unbound im Container und haelt beide auf Stand.
+# Installs Blocky and Unbound in the container and keeps both current.
 #
-# Ein Provisioner und kein Hook-Script: der Hook liefe bei jedem Start des
-# Containers und damit auch dann, wenn niemand etwas geaendert hat. Hier haengt
-# der Lauf an den Pruefsummen der drei Dateien und der Blocky-Version, laeuft
-# also genau dann, wenn es etwas zu tun gibt.
+# A provisioner and not a hook script: the hook would run on every start of
+# the container and therefore also when nobody changed anything. Here the run
+# hangs off the checksums of the files and the Blocky version, so it runs
+# exactly when there is something to do.
 #
-# Der Weg fuehrt ueber den Proxmox-Host und "pct", nicht per SSH in den
-# Container: der hat keinen sshd, und einen nur fuer die Provisionierung
-# einzurichten waere mehr Angriffsflaeche als Nutzen.
+# The path leads through the Proxmox host and "pct", not via SSH into the
+# container: it has no sshd, and setting one up just for provisioning would be
+# more attack surface than benefit.
 resource "terraform_data" "blocky_provision" {
   triggers_replace = {
     container      = proxmox_virtual_environment_container.blocky.id
@@ -241,10 +241,9 @@ resource "terraform_data" "blocky_provision" {
     proxmox_virtual_environment_file.blocky_install_script,
   ]
 
-  # Schluessel ausdruecklich, nicht ueber den Agent: der ist auf diesem Rechner
-  # leer, die Anmeldung an pve laeuft ueber IdentityFile in ~/.ssh/config. Die
-  # liest Terraform nicht, ein "agent = true" laeuft deshalb in
-  # "no supported methods remain".
+  # Key explicitly, not through the agent: it is empty on this machine, the
+  # login to pve runs through IdentityFile in ~/.ssh/config. Terraform does not
+  # read that, so an "agent = true" ends up in "no supported methods remain".
   connection {
     type        = "ssh"
     host        = regex("^https?://([^:/]+)", var.proxmox_endpoint)[0]
@@ -261,7 +260,7 @@ resource "terraform_data" "blocky_provision" {
 }
 
 output "blocky_lxc" {
-  description = "Blocky-LXC: Container-ID und statische Adressen"
+  description = "Blocky LXC: container id and static addresses"
   value = {
     vm_id = proxmox_virtual_environment_container.blocky.vm_id
     ipv4  = split("/", local.blocky_lxc.ipv4_address)[0]

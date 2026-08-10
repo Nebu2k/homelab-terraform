@@ -1,34 +1,36 @@
 #!/bin/sh
 #
-# Holt die Blocky-Konfiguration aus dem Cluster-Repo und wendet sie an. Laeuft
-# als cron-Job IM Container, nicht auf dem Proxmox-Host.
+# Fetches the Blocky configuration from the cluster repo and applies it. Runs
+# as a cron job INSIDE the container, not on the Proxmox host.
 #
-# Der Zweck: config.yml ist die gemeinsame Wahrheit beider Blocky-Instanzen.
-# Die Cluster-Instanz bekommt jede Aenderung von ArgoCD, ohne dass jemand etwas
-# tut. Ohne dieses Skript braeuchte die LXC dafuer ein "terraform apply" von
-# Hand, und die beiden Resolver liefen so lange auseinander, bis sich jemand
-# erinnert.
+# The point: config.yml is the shared truth of both Blocky instances. The
+# cluster instance gets every change from ArgoCD without anyone doing
+# anything. Without this script the LXC would need a "terraform apply" by
+# hand for it, and the two resolvers would drift apart until someone
+# remembered.
 #
-# Terraform legt das Skript ab und bleibt Eigentuemer des Containers, aber
-# nicht mehr seiner Konfiguration.
+# Terraform drops the script off and stays the owner of the container, but no
+# longer of its configuration.
 #
-# Drei Sicherungen, weil beide Instanzen sonst gleichzeitig fallen koennten:
+# Three safeguards, because both instances could otherwise fall at once:
 #
-#   1. "blocky validate" laeuft VOR dem Neustart. Eine Konfiguration, die
-#      Blocky nicht annimmt, wird gar nicht erst eingebaut.
-#   2. Die laufende Fassung bleibt als .last-good liegen. Startet Blocky mit der
-#      neuen trotzdem nicht, rollt das Skript zurueck und startet erneut.
-#   3. Der Timer laeuft mit Abstand zur Cluster-Instanz. ArgoCD ist in Minuten
-#      dran, hier vergeht eine Viertelstunde: geht eine Aenderung schief, ist
-#      sie im Cluster sichtbar, waehrend hier noch der alte Stand laeuft.
+#   1. "blocky validate" runs BEFORE the restart. A configuration Blocky does
+#      not accept is never installed in the first place.
+#   2. The running version stays behind as .last-good. If Blocky fails to
+#      start with the new one anyway, the script rolls back and restarts.
+#   3. The timer runs at a distance from the cluster instance. ArgoCD is
+#      there in minutes, here a quarter of an hour passes: if a change goes
+#      wrong, it is visible in the cluster while this side still runs the
+#      old state.
 #
-# Terraform rendert diese Datei aus blocky/config-sync.sh.tftpl.
+# Terraform renders this file from blocky/config-sync.sh.tftpl.
 
 set -eu
 
-# cron und "pct exec" bringen /usr/local/bin nicht mit, dort liegt aber das
-# Blocky-Binary. Ohne diese Zeile scheitert unten "blocky validate" mit "not
-# found", und das Skript haelt eine voellig gesunde Konfiguration fuer kaputt.
+# cron and "pct exec" do not bring /usr/local/bin along, which is where the
+# Blocky binary lives. Without this line "blocky validate" below fails with
+# "not found", and the script takes a perfectly healthy configuration for a
+# broken one.
 PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 export PATH
 
@@ -42,16 +44,15 @@ statefile=${textfile_dir}/blocky-config-sync.prom
 
 log() { logger -t blocky-config-sync "$*"; echo "[blocky-config-sync] $*"; }
 
-# Ergebnis des letzten Laufs als Prometheus-Textfile. Ohne das waere ein
-# dauerhaft scheiterndes Sync still: Blocky laeuft ja weiter, nur eben mit
-# altem Stand.
+# Result of the last run as a Prometheus textfile. Without it a permanently
+# failing sync would be silent: Blocky keeps running, just on an old state.
 write_state() {
   mkdir -p "$(dirname "$statefile")"
   cat > "$statefile.tmp" <<STATE
-# HELP blocky_config_sync_success Letzter Lauf des Config-Sync erfolgreich (1) oder nicht (0)
+# HELP blocky_config_sync_success Last config sync run successful (1) or not (0)
 # TYPE blocky_config_sync_success gauge
 blocky_config_sync_success $1
-# HELP blocky_config_sync_timestamp_seconds Zeitpunkt des letzten erfolgreichen Laufs
+# HELP blocky_config_sync_timestamp_seconds Time of the last successful run
 # TYPE blocky_config_sync_timestamp_seconds gauge
 blocky_config_sync_timestamp_seconds $2
 STATE
@@ -61,9 +62,9 @@ STATE
 last_ts=$(awk '/^blocky_config_sync_timestamp_seconds /{print $2}' "$statefile" 2>/dev/null || true)
 last_ts=$${last_ts:-0}
 
-# ------------------------------------------------------------------- Abholen
+# -------------------------------------------------------------------- Fetch
 if ! curl -fsSL --max-time 30 "$url" -o "$staging"; then
-  log "Download fehlgeschlagen, behalte den laufenden Stand"
+  log "Download failed, keeping the running state"
   write_state 0 "$last_ts"
   exit 0
 fi
@@ -74,38 +75,38 @@ if [ -f "$config" ] && cmp -s "$staging" "$config"; then
   exit 0
 fi
 
-# ------------------------------------------------------------------- Pruefen
-# Ein fehlendes Binary ist etwas anderes als eine kaputte Konfiguration und
-# darf nicht als solche gemeldet werden.
+# ------------------------------------------------------------------ Validate
+# A missing binary is something other than a broken configuration and must
+# not be reported as one.
 if [ ! -x "$blocky" ]; then
-  log "$blocky fehlt, Sync abgebrochen"
+  log "$blocky missing, sync aborted"
   rm -f "$staging"
   write_state 0 "$last_ts"
   exit 1
 fi
 
-# Sicherung 1. Blocky liest die Datei hier nur, es laeuft nichts an. Die
-# Fehlermeldung wird mitgeloggt, sonst steht im Journal nur "ungueltig".
+# Safeguard 1. Blocky only reads the file here, nothing starts up. The error
+# message is logged along with it, otherwise the journal only says "invalid".
 if ! validate_out=$("$blocky" validate --config "$staging" 2>&1); then
-  log "Neue Konfiguration ist ungueltig, sie wird NICHT eingebaut: $validate_out"
+  log "New configuration is invalid, it will NOT be installed: $validate_out"
   rm -f "$staging"
   write_state 0 "$last_ts"
   exit 1
 fi
 
-# ------------------------------------------------------------------ Anwenden
-log "Neue Konfiguration gefunden und gueltig, wende sie an"
+# --------------------------------------------------------------------- Apply
+log "New configuration found and valid, applying it"
 [ -f "$config" ] && cp "$config" "$lastgood"
 mv "$staging" "$config"
 
-# Nach dem Neustart lauscht Blocky nicht sofort auf Port 53: es laedt erst die
-# Blocklisten. Ohne diese Wartezeit meldet der Healthcheck einen Fehlstart und
-# die Sicherung unten rollt eine voellig gesunde Konfiguration zurueck.
+# After the restart Blocky does not listen on port 53 right away: it loads the
+# blocklists first. Without this wait the healthcheck reports a failed start
+# and the safeguard below rolls back a perfectly healthy configuration.
 if rc-service blocky restart >/dev/null 2>&1; then
   i=0
   while [ "$i" -lt 30 ]; do
     if "$blocky" healthcheck >/dev/null 2>&1; then
-      log "Blocky laeuft mit der neuen Konfiguration"
+      log "Blocky is running with the new configuration"
       write_state 1 "$(date +%s)"
       exit 0
     fi
@@ -114,9 +115,9 @@ if rc-service blocky restart >/dev/null 2>&1; then
   done
 fi
 
-# Sicherung 2. Gueltig heisst nicht lauffaehig: ein nicht erreichbarer Upstream
-# oder ein belegter Port faellt erst hier auf.
-log "Blocky kommt mit der neuen Konfiguration nicht hoch, rolle zurueck"
+# Safeguard 2. Valid does not mean runnable: an unreachable upstream or an
+# occupied port only shows up here.
+log "Blocky does not come up with the new configuration, rolling back"
 if [ -f "$lastgood" ]; then
   cp "$lastgood" "$config"
   rc-service blocky restart >/dev/null 2>&1 || true

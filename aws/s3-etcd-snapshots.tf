@@ -1,24 +1,24 @@
-# Offsite-Ablage der etcd-Snapshots der drei Control-Plane-Nodes.
+# Offsite storage of the etcd snapshots of the three control plane nodes.
 #
-# Inhalt: ein Snapshot je Node und Lauf, Objektname
-# "etcd-snapshot-<node>-<unix-ts>" im Bucket-Root. Ein Snapshot liegt bei rund
-# 55 MB. Geschrieben wird von drei CronJobs im Cluster (kube-system, Manifeste
-# in kubernetes-homelab/manifests/etcd-backup/), je einer pro Control-Plane,
-# zweimal taeglich und gestaffelt. Talos laedt Snapshots nicht selbst hoch, es
-# gibt sie nur ueber die API heraus.
+# Content: one snapshot per node and run, object name
+# "etcd-snapshot-<node>-<unix-ts>" in the bucket root. A snapshot is around
+# 55 MB. Written by three CronJobs in the cluster (kube-system, manifests in
+# kubernetes-homelab/manifests/etcd-backup/), one per control plane, twice a
+# day and staggered. Talos does not upload snapshots itself, it only hands
+# them out over the API.
 #
-# Ein Snapshot enthaelt jedes Secret des Clusters. Die Cluster-Secrets sind in
-# etcd verschluesselt abgelegt (cluster.secretboxEncryptionSecret in der Machine
-# Config); der zugehoerige Schluessel steht in talsecret.sops.yaml und ist ohne
-# den privaten age-Key nicht lesbar. Ohne diesen Schluessel ist ein Snapshot aus
-# diesem Bucket nicht wiederherstellbar.
+# A snapshot contains every secret of the cluster. The cluster secrets are
+# stored encrypted in etcd (cluster.secretboxEncryptionSecret in the machine
+# config); the matching key lives in talsecret.sops.yaml and is unreadable
+# without the private age key. Without that key a snapshot from this bucket
+# cannot be restored.
 
 resource "aws_s3_bucket" "etcd_snapshots" {
   bucket = var.etcd_snapshots_bucket
 
-  # force_destroy steht auf dem Default false. S3 lehnt das Loeschen eines
-  # befuellten Buckets mit BucketNotEmpty ab, prevent_destroy faengt den Fall
-  # bereits im plan ab.
+  # force_destroy is left at its default of false. S3 refuses to delete a
+  # populated bucket with BucketNotEmpty, and prevent_destroy catches the case
+  # in the plan already.
   lifecycle {
     prevent_destroy = true
   }
@@ -57,8 +57,8 @@ resource "aws_s3_bucket_server_side_encryption_configuration" "etcd_snapshots" {
   }
 }
 
-# Versioning ist aktiv. Es wirkt nicht rueckwirkend, geschuetzt ist nur, was
-# danach geschrieben wurde.
+# Versioning is on. It does not apply retroactively, only what was written
+# afterwards is protected.
 resource "aws_s3_bucket_versioning" "etcd_snapshots" {
   bucket = aws_s3_bucket.etcd_snapshots.id
 
@@ -71,16 +71,16 @@ resource "aws_s3_bucket_versioning" "etcd_snapshots" {
   }
 }
 
-# Die Tiefe des Buckets kommt ausschliesslich aus diesen Regeln. Die CronJobs
-# laden nur hoch und loeschen nichts.
+# The depth of the bucket comes from these rules alone. The CronJobs only
+# upload and never delete.
 #
-# Der Bucket dient ausschliesslich diesem Zweck, die Regeln greifen deshalb ohne
-# Praefix-Filter ueber den gesamten Inhalt.
+# The bucket serves this one purpose, so the rules apply to its entire content
+# without a prefix filter.
 resource "aws_s3_bucket_lifecycle_configuration" "etcd_snapshots" {
   bucket = aws_s3_bucket.etcd_snapshots.id
 
-  # Snapshots liegen ueber der 8-MB-Schwelle der AWS-CLI und gehen als Multipart
-  # hoch. Abgebrochene Teile sind im Listing unsichtbar und werden berechnet.
+  # Snapshots are above the 8 MB threshold of the AWS CLI and go up as
+  # multipart. Aborted parts are invisible in the listing and still billed.
   rule {
     id     = "abort-incomplete-multipart-uploads"
     status = "Enabled"
@@ -103,13 +103,13 @@ resource "aws_s3_bucket_lifecycle_configuration" "etcd_snapshots" {
     }
   }
 
-  # In einem versionierten Bucket loescht "expiration" nicht, sondern setzt einen
-  # Delete-Marker; die Daten liegen als noncurrent version darunter weiter.
-  # noncurrent_version_expiration raeumt diese ab, expired_object_delete_marker
-  # die allein zurueckbleibenden Marker.
+  # In a versioned bucket "expiration" does not delete, it places a delete
+  # marker; the data stays underneath as a noncurrent version.
+  # noncurrent_version_expiration clears those out, expired_object_delete_marker
+  # the markers left behind on their own.
   #
-  # expired_object_delete_marker vertraegt sich nicht mit "days" im selben
-  # expiration-Block, daher eine eigene Regel.
+  # expired_object_delete_marker cannot be combined with "days" in the same
+  # expiration block, hence a rule of its own.
   rule {
     id     = "cleanup-noncurrent-and-markers"
     status = "Enabled"

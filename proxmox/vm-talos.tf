@@ -1,46 +1,45 @@
-# Talos-Control-Plane-VM auf dem Proxmox-Host.
+# Talos control plane VM on the Proxmox host.
 #
-# Der Stack umfasst genau eine VM. Die beiden anderen Control-Plane-Nodes des
-# Clusters laufen auf Blech und stehen deshalb nicht hier.
+# The stack covers exactly one VM. The cluster's other two control plane nodes
+# run on bare metal and therefore are not here.
 #
-# Die VMs laufen bewusst nicht ueber ein Modul mit cloud-init: Talos hat keine
-# Shell, keinen Paketmanager und keine User-Accounts. Die vollstaendige
-# Node-Konfiguration steht als Machine Config unter kubernetes-homelab/talos/
-# und wird per talosctl appliziert.
+# The VMs deliberately do not go through a module with cloud-init: Talos has
+# no shell, no package manager and no user accounts. The complete node
+# configuration lives as a machine config under kubernetes-homelab/talos/ and
+# is applied with talosctl.
 
 locals {
-  # Adressen aus dem Cluster-Block .20-.29 des Adressplans. Der VIP (.248) und
-  # der MetalLB-Pool (.240-.247) stehen nicht hier, die verwalten Talos selbst
-  # bzw. MetalLB im Cluster.
+  # Addresses from the .20-.29 cluster block of the address plan. The VIP
+  # (.248) and the MetalLB pool (.240-.247) are not here, those are managed by
+  # Talos itself and by MetalLB in the cluster.
   talos_nodes = {
-    # usb_devices: Vendor/Product-IDs, die dieser VM durchgereicht werden.
+    # usb_devices: vendor/product ids passed through to this VM.
     #
-    # talos-cp-1 traegt den RTL-SDR (0bda:2838, RTL2838 DVB-T). readsb laeuft
-    # als Pod im Cluster und ist per nodeSelector an genau diese Node gebunden;
-    # ein Umstecken aendert diese Zeile und den nodeSelector in
+    # talos-cp-1 carries the RTL-SDR (0bda:2838, RTL2838 DVB-T). readsb runs as
+    # a pod in the cluster and is bound to exactly this node by nodeSelector;
+    # moving the stick changes this line and the nodeSelector in
     # kubernetes-homelab/manifests/readsb/deployment.yaml.
     #
-    # Die Bindung laeuft ueber Vendor/Product, nicht ueber den Portpfad: so
-    # findet qemu den Stick nach einem Reset auch an einem anderen Port wieder.
+    # The binding goes by vendor/product, not by port path: that way qemu finds
+    # the stick again on a different port after a reset.
     #
-    # ACHTUNG: das Hinzufuegen oder Entfernen eines usb-Blocks stoppt und startet
-    # die VM. Nur bei gesundem etcd und nur an einer Node auf einmal.
+    # CAUTION: adding or removing a usb block stops and starts the VM. Only
+    # with healthy etcd and only on one node at a time.
     "talos-cp-1" = { vm_id = 110, ip = "192.168.2.20", usb_devices = ["0bda:2838"] }
   }
 }
 
-# Talos-Image aus der Image Factory. Die Schematic-ID kodiert die System
-# Extensions (iscsi-tools und util-linux-tools fuer Longhorn, qemu-guest-agent
-# fuer Proxmox) und muss zu der passen, die in
-# kubernetes-homelab/talos/talconfig.yaml bei DIESER VM steht. Laufen sie
-# auseinander, faellt die Node beim naechsten Upgrade auf ein Image ohne
-# Extensions zurueck und Longhorn verliert seine Volumes.
+# Talos image from the Image Factory. The schematic id encodes the system
+# extensions (iscsi-tools and util-linux-tools for Longhorn, qemu-guest-agent
+# for Proxmox) and has to match the one kubernetes-homelab/talos/talconfig.yaml
+# carries for THIS VM. If they drift apart, the node falls back to an image
+# without extensions on the next upgrade and Longhorn loses its volumes.
 #
-# Die Blech-Nodes haben eigene Schematics ohne qemu-guest-agent, die stehen
-# drueben. Diese Variable gilt ausschliesslich fuer die VM.
+# The bare-metal nodes have their own schematics without qemu-guest-agent,
+# those live over there. This variable applies to the VM only.
 #
-# nocloud statt metal: das Image ist ein fertiges Disk-Image und wird direkt als
-# Boot-Disk geklont, die VM bootet sofort in den Maintenance-Mode.
+# nocloud instead of metal: the image is a finished disk image and is cloned
+# directly as the boot disk, so the VM boots straight into maintenance mode.
 resource "proxmox_download_file" "talos_nocloud_image" {
   content_type            = "iso"
   datastore_id            = var.talos_image_storage
@@ -57,7 +56,7 @@ resource "proxmox_virtual_environment_vm" "talos" {
   for_each = local.talos_nodes
 
   name        = each.key
-  description = "Talos Control Plane (${each.value.ip}), Konfiguration in kubernetes-homelab/talos/"
+  description = "Talos control plane (${each.value.ip}), configuration in kubernetes-homelab/talos/"
   node_name   = var.proxmox_node
   vm_id       = each.value.vm_id
   tags        = ["talos", "kubernetes", "terraform"]
@@ -70,8 +69,8 @@ resource "proxmox_virtual_environment_vm" "talos" {
 
   cpu {
     cores = var.talos_vm_cpu_cores
-    # "host" statt kvm64: Talos setzt x86-64-v2 voraus, kvm64 erfuellt das nicht
-    # und die VM bleibt beim Boot stehen.
+    # "host" instead of kvm64: Talos requires x86-64-v2, kvm64 does not meet
+    # that and the VM stalls at boot.
     type = "host"
   }
 
@@ -93,7 +92,7 @@ resource "proxmox_virtual_environment_vm" "talos" {
     bridge = var.talos_vm_network_bridge
   }
 
-  # Leer fuer Nodes ohne durchgereichte Hardware, siehe usb_devices oben.
+  # Empty for nodes without passed-through hardware, see usb_devices above.
   dynamic "usb" {
     for_each = each.value.usb_devices
     content {
@@ -106,12 +105,13 @@ resource "proxmox_virtual_environment_vm" "talos" {
     type = "l26"
   }
 
-  # Der qemu-guest-agent kommt als System Extension aus dem Image und laeuft erst
-  # nach dem Bootstrap. Proxmox kann die Node damit geordnet herunterfahren.
+  # The qemu-guest-agent comes from the image as a system extension and only
+  # runs after the bootstrap. It lets Proxmox shut the node down in an orderly
+  # way.
   #
-  # Wird eine Node im Maintenance-Mode neu aufgesetzt, muss das vorher auf false:
-  # ein aktivierter Agent laesst Terraform sonst auf eine IP warten, die in
-  # diesem Zustand nie gemeldet wird.
+  # When a node is rebuilt in maintenance mode this has to go to false first:
+  # an enabled agent otherwise makes Terraform wait for an IP that is never
+  # reported in that state.
   agent {
     enabled = true
     timeout = "1m"
@@ -120,17 +120,17 @@ resource "proxmox_virtual_environment_vm" "talos" {
   lifecycle {
     ignore_changes = [
       started,
-      # Talos-Upgrades laufen ueber "talosctl upgrade", nicht ueber ein frisch
-      # geklontes Disk-Image. Ohne dieses Ignore wuerde eine neue talos_version
-      # die VM samt EPHEMERAL-Partition neu bauen, also etcd und
-      # Longhorn-Replikate mitnehmen.
+      # Talos upgrades run through "talosctl upgrade", not through a freshly
+      # cloned disk image. Without this ignore, a new talos_version would
+      # rebuild the VM including the EPHEMERAL partition, taking etcd and the
+      # Longhorn replicas with it.
       disk[0].file_id,
     ]
   }
 }
 
 output "talos_nodes" {
-  description = "Talos-Control-Plane-VMs: Name, VM-ID und statische IP"
+  description = "Talos control plane VMs: name, vm id and static IP"
   value = {
     for name, node in local.talos_nodes : name => {
       vm_id = proxmox_virtual_environment_vm.talos[name].vm_id

@@ -1,8 +1,7 @@
-# Die Buckets fuer paperless-ngx und Home Assistant.
+# The buckets for paperless-ngx and Home Assistant.
 #
-# Public-Access-Block, Verschluesselung und Ownership sind hier beschrieben und
-# nicht nur Konsolen-Zustand; eine Verstellung meldet der naechste plan als
-# Drift.
+# Public access block, encryption and ownership are described here and are not
+# just console state; the next plan reports any change to them as drift.
 
 resource "aws_s3_bucket" "paperless" {
   bucket = var.paperless_bucket
@@ -74,9 +73,9 @@ resource "aws_s3_bucket_versioning" "paperless" {
   }
 }
 
-# Nur der Multipart-Abbruch, keine Retention. Der Sidecar synct ohne "--delete",
-# der Bucket ist damit ein Archiv und kein Spiegel: er enthaelt auch Staende, zu
-# denen kein Dokument mehr existiert.
+# Only the multipart abort, no retention. The sidecar syncs without
+# "--delete", which makes the bucket an archive rather than a mirror: it also
+# holds states for documents that no longer exist.
 resource "aws_s3_bucket_lifecycle_configuration" "paperless" {
   bucket = aws_s3_bucket.paperless.id
 
@@ -124,10 +123,10 @@ resource "aws_s3_bucket_server_side_encryption_configuration" "home_assistant" {
   }
 }
 
-# Dieser Bucket ist unversioniert, es gibt fuer ihn keine
-# aws_s3_bucket_versioning-Ressource. Die Tiefe der automatischen Backups
-# steuert Home Assistant selbst ueber seine eigene Retention ("behalte N
-# automatische Backups"), nicht eine Regel hier.
+# This bucket is unversioned, there is no aws_s3_bucket_versioning resource
+# for it. The depth of the automatic backups is managed by Home Assistant
+# itself through its own retention ("keep N automatic backups"), not by a rule
+# here.
 resource "aws_s3_bucket_lifecycle_configuration" "home_assistant" {
   bucket = aws_s3_bucket.home_assistant.id
 
@@ -143,21 +142,20 @@ resource "aws_s3_bucket_lifecycle_configuration" "home_assistant" {
   }
 
   # ---------------------------------------------------------------------------
-  # Monatsarchiv.
+  # Monthly archive.
   #
-  # Eine monatliche HA-Automation erzeugt ein MANUELLES Backup. HAs Retention
-  # greift ausschliesslich auf automatische Backups, ein manuelles bleibt
-  # liegen, bis es geloescht wird; das uebernimmt diese Regel. Die Staende
-  # landen als "<prefix>_<Datum>_<Zeit>_<ms>.tar" (+ .metadata.json) im
-  # Bucket-Root, getrennt von "Automatic_backup_".
+  # A monthly HA automation creates a MANUAL backup. HA's retention applies to
+  # automatic backups only, a manual one stays until it is deleted; that is
+  # what this rule does. The states land as "<prefix>_<date>_<time>_<ms>.tar"
+  # (+ .metadata.json) in the bucket root, separate from "Automatic_backup_".
   #
-  # Lifecycle-Filter koennen nicht negieren, "alles ausser Automatic_" gibt es
-  # nicht. Die Regel haengt am literalen Praefix aus
-  # var.home_assistant_archive_prefix; passt es nicht mehr zum Backup-Namen aus
-  # der Automation, greift sie still nicht mehr.
+  # Lifecycle filters cannot negate, there is no "everything except
+  # Automatic_". The rule hangs off the literal prefix from
+  # var.home_assistant_archive_prefix; if that no longer matches the backup
+  # name from the automation, it silently stops matching.
   #
-  # Der Bucket ist unversioniert, die Expiration loescht also direkt. Es
-  # entstehen keine Delete-Marker, die nachzuraeumen waeren.
+  # The bucket is unversioned, so the expiration deletes directly. No delete
+  # markers are created that would need cleaning up.
   rule {
     id     = "expire-monthly-archive"
     status = "Enabled"

@@ -1,12 +1,12 @@
-# Offsite-Backup der Mealie-Rezepte.
+# Offsite backup of the Mealie recipes.
 #
-# Inhalt sind die ZIPs aus Mealies eingebautem Backup unter den Praefixen
-# "daily/" und "monthly/", erzeugt vom CronJob
-# kubernetes-homelab/manifests/mealie/backup-cronjob.yaml. Ein ZIP enthaelt den
-# Datenbank-Stand UND das Data-Verzeichnis mit den Rezeptbildern und laesst sich
-# ueber Mealies eigenen Restore-Endpunkt zurueckspielen. Deshalb hier ein ZIP
-# statt eines pg_dump wie bei teslamate: der Dump allein waere nur die halbe
-# Wiederherstellung, die Bilder liegen im Dateisystem.
+# The content is the ZIPs from Mealie's built-in backup under the prefixes
+# "daily/" and "monthly/", produced by the CronJob
+# kubernetes-homelab/manifests/mealie/backup-cronjob.yaml. A ZIP contains the
+# database state AND the data directory with the recipe images, and can be
+# restored through Mealie's own restore endpoint. Hence a ZIP here instead of a
+# pg_dump like teslamate: the dump alone would only be half the recovery, the
+# images live in the filesystem.
 
 resource "aws_s3_bucket" "mealie" {
   bucket = var.mealie_bucket
@@ -101,10 +101,10 @@ resource "aws_s3_bucket_lifecycle_configuration" "mealie" {
     }
   }
 
-  # In einem versionierten Bucket loescht "expiration" nicht, sondern setzt einen
-  # Delete-Marker. Ohne diese Regel liegen die Daten als noncurrent version
-  # weiter da und kosten weiter. expired_object_delete_marker vertraegt sich
-  # nicht mit "days" im selben expiration-Block, daher eine eigene Regel.
+  # In a versioned bucket "expiration" does not delete, it places a delete
+  # marker. Without this rule the data stays around as a noncurrent version and
+  # keeps costing. expired_object_delete_marker cannot be combined with "days"
+  # in the same expiration block, hence a rule of its own.
   rule {
     id     = "cleanup-noncurrent-and-markers"
     status = "Enabled"

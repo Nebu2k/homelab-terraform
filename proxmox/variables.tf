@@ -45,8 +45,8 @@ variable "proxmox_node" {
 # ============================================
 # Talos Control Plane VMs
 # ============================================
-# Werte stehen als default hier und nicht in terraform.tfvars: die tfvars ist
-# gitignored und waere fuer jeden anderen Klon des Repos leer.
+# Values sit here as defaults rather than in terraform.tfvars: the tfvars is
+# gitignored and would be empty for any other clone of the repo.
 
 variable "talos_version" {
   description = "Talos version for the Image Factory download (must match kubernetes-homelab/talos/talconfig.yaml)"
@@ -69,30 +69,30 @@ variable "talos_vm_cpu_cores" {
 variable "talos_vm_memory" {
   description = "Memory in MB per Talos control plane VM"
   type        = number
-  # Der Wert deckt den Ausfall einer der beiden Blech-Control-Planes ab: die
-  # beweglichen Pods von dort muessen auf die verbleibenden Nodes passen. Der
-  # groesste davon ist Prometheus, und der traegt einen arch-Selektor auf amd64
-  # (kubernetes-homelab, values.yaml der kube-prometheus-stack). Die arm64-Node
-  # kann ihn nicht nehmen, diese VM ist damit sein einziger Ausweichplatz.
+  # The value covers the loss of one of the two bare-metal control planes: the
+  # movable pods from there have to fit on the remaining nodes. The largest of
+  # them is Prometheus, and it carries an arch selector on amd64
+  # (kubernetes-homelab, values.yaml of the kube-prometheus-stack). The arm64
+  # node cannot take it, which makes this VM its only fallback spot.
   #
-  # Der Host hat 30 GB und traegt sonst keine VM mehr.
+  # The host has 30 GB and carries no other VM.
   #
-  # Eine Aenderung kostet einen Stopp der VM: Proxmox haengt Speicher ohne
-  # Ballooning nicht heiss an. Bei mehreren VMs nacheinander, nie gleichzeitig,
-  # sonst faellt das etcd-Quorum. Diese Node traegt zudem den SDR, readsb und
-  # fr24 sind waehrend des Reboots offline.
+  # A change costs a stop of the VM: Proxmox does not attach memory hot without
+  # ballooning. With several VMs one after another, never at the same time, or
+  # etcd loses quorum. This node also carries the SDR, so readsb and fr24 are
+  # offline during the reboot.
   default = 16384
 }
 
 variable "talos_vm_disk_size" {
   description = "Disk size in GB per Talos control plane VM (holds etcd and Longhorn replicas)"
   type        = number
-  # Longhorn schedult nur, solange 25 Prozent der Disk frei bleiben
-  # (storage-minimal-available-percentage), und ueberbucht nicht
-  # (over-provisioning 100). Nutzbar sind davon also rund drei Viertel.
+  # Longhorn only schedules while 25 percent of the disk stays free
+  # (storage-minimal-available-percentage) and does not overcommit
+  # (over-provisioning 100). Roughly three quarters of this is usable.
   #
-  # Talos zieht die EPHEMERAL-Partition beim naechsten Boot selbst nach, ein
-  # Resize wird erst mit einem Reboot wirksam.
+  # Talos grows the EPHEMERAL partition itself on the next boot, so a resize
+  # only takes effect with a reboot.
   default = 400
 }
 
@@ -115,7 +115,7 @@ variable "talos_vm_network_bridge" {
 }
 
 # ============================================
-# Blocky LXC (zweite Resolver-Instanz)
+# Blocky LXC (second resolver instance)
 # ============================================
 
 variable "blocky_version" {

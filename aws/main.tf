@@ -9,17 +9,16 @@ terraform {
   }
 }
 
-# Credentials kommen aus der AWS-CLI-Umgebung (~/.aws, Profil "default"), wie
-# beim S3-State-Backend aller Stacks. Es gibt hier keine terraform.tfvars und
-# keine Variable fuer Key/Secret.
+# Credentials come from the AWS CLI environment (~/.aws, profile "default"),
+# same as the S3 state backend of every stack. There is no terraform.tfvars
+# here and no variable for key/secret.
 provider "aws" {
   region = var.aws_region
 
-  # Die "Description", die AWS beim Anlegen eines Access Keys in der Konsole
-  # abfragt, landet als Tag am IAM-User, mit der Key-ID als Tag-Namen. Terraform
-  # verwaltet die User-Tags und wuerde sie sonst als Drift entfernen. Die
-  # Tag-Namen aendern sich bei jeder Rotation, deshalb ein Prefix statt einer
-  # Aufzaehlung.
+  # The "description" AWS asks for when creating an access key in the console
+  # ends up as a tag on the IAM user, with the key id as the tag name.
+  # Terraform manages the user tags and would otherwise remove them as drift.
+  # The tag names change on every rotation, hence a prefix rather than a list.
   ignore_tags {
     key_prefixes = ["AKIA"]
   }

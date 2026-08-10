@@ -1,16 +1,16 @@
-# Offsite-Backup der Teslamate-Datenbank.
+# Offsite backup of the Teslamate database.
 #
-# Inhalt sind in sich geschlossene "pg_dump -Fc"-Staende unter den Praefixen
-# "daily/" und "monthly/", erzeugt vom CronJob
-# kubernetes-homelab/manifests/teslamate/backup-cronjob.yaml. Ein Dump liegt bei
-# rund 60 MB.
+# The content is self-contained "pg_dump -Fc" states under the prefixes
+# "daily/" and "monthly/", produced by the CronJob
+# kubernetes-homelab/manifests/teslamate/backup-cronjob.yaml. A dump is around
+# 60 MB.
 
 resource "aws_s3_bucket" "teslamate" {
   bucket = var.teslamate_bucket
 
-  # force_destroy steht auf dem Default false. S3 lehnt das Loeschen eines
-  # befuellten Buckets mit BucketNotEmpty ab, prevent_destroy faengt den Fall
-  # bereits im plan ab.
+  # force_destroy is left at its default of false. S3 refuses to delete a
+  # populated bucket with BucketNotEmpty, and prevent_destroy catches the case
+  # in the plan already.
   lifecycle {
     prevent_destroy = true
   }
@@ -49,10 +49,10 @@ resource "aws_s3_bucket_server_side_encryption_configuration" "teslamate" {
   }
 }
 
-# Versioning ist aktiv und deckt das Ueberschreiben bestehender Keys ab; die
-# vorherigen Dumps liegen dann als noncurrent version darunter und ueberleben
-# teslamate_noncurrent_days. Es ist keine Retention, die Tiefe machen die
-# Expiration-Regeln unten.
+# Versioning is on and covers overwriting existing keys; the previous dumps
+# then sit underneath as noncurrent versions and survive
+# teslamate_noncurrent_days. It is not a retention, the depth comes from the
+# expiration rules below.
 resource "aws_s3_bucket_versioning" "teslamate" {
   bucket = aws_s3_bucket.teslamate.id
 
@@ -68,9 +68,9 @@ resource "aws_s3_bucket_versioning" "teslamate" {
 resource "aws_s3_bucket_lifecycle_configuration" "teslamate" {
   bucket = aws_s3_bucket.teslamate.id
 
-  # Die Dumps liegen ueber der 8-MB-Schwelle der AWS-CLI, jeder Upload ist ein
-  # Multipart-Upload. Abgebrochene Teile sind im Listing unsichtbar und werden
-  # berechnet.
+  # The dumps are above the 8 MB threshold of the AWS CLI, so every upload is
+  # a multipart upload. Aborted parts are invisible in the listing and still
+  # billed.
   rule {
     id     = "abort-incomplete-multipart-uploads"
     status = "Enabled"
@@ -108,13 +108,13 @@ resource "aws_s3_bucket_lifecycle_configuration" "teslamate" {
     }
   }
 
-  # In einem versionierten Bucket loescht "expiration" nicht, sondern setzt einen
-  # Delete-Marker; die Daten liegen als noncurrent version darunter weiter.
-  # noncurrent_version_expiration raeumt diese ab, expired_object_delete_marker
-  # die allein zurueckbleibenden Marker.
+  # In a versioned bucket "expiration" does not delete, it places a delete
+  # marker; the data stays underneath as a noncurrent version.
+  # noncurrent_version_expiration clears those out, expired_object_delete_marker
+  # the markers left behind on their own.
   #
-  # expired_object_delete_marker vertraegt sich nicht mit "days" im selben
-  # expiration-Block, daher eine eigene Regel.
+  # expired_object_delete_marker cannot be combined with "days" in the same
+  # expiration block, hence a rule of its own.
   rule {
     id     = "cleanup-noncurrent-and-markers"
     status = "Enabled"

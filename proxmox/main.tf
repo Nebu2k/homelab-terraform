@@ -4,8 +4,8 @@ terraform {
   required_providers {
     proxmox = {
       source = "bpg/proxmox"
-      # Untergrenze 0.111.1: aeltere Versionen kennen den Ressourcentyp
-      # proxmox_download_file noch nicht.
+      # Lower bound 0.111.1: older versions do not know the
+      # proxmox_download_file resource type yet.
       version = ">= 0.111.1, < 1.0.0"
     }
   }
