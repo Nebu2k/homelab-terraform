@@ -131,3 +131,17 @@ variable "mealie_noncurrent_days" {
   type        = number
   default     = 30
 }
+
+variable "alerts_topic_name" {
+  description = "SNS-Topic, in das der Alertmanager publisht"
+  type        = string
+  default     = "homelab"
+}
+
+# Aendert sich die Adresse, ersetzt Terraform die Subscription und die neue ist
+# unbestaetigt. Siehe sns-alerts.tf.
+variable "alerts_email" {
+  description = "Empfaenger der bestaetigten email-Subscription am Alarm-Topic"
+  type        = string
+  default     = "alerts@elmstreet79.de"
+}

@@ -39,3 +39,15 @@ output "backup_consumer_users" {
     (aws_iam_user.mealie_backup.name)          = "Secret s3-mealie-backup-credentials, Namespace mealie"
   }
 }
+
+# Die topic_arn gehoert nach kubernetes-homelab/manifests/kube-prometheus-stack/
+# values.yaml, der Access Key des publisher ins SealedSecret
+# "alertmanager-aws-credentials" im Namespace monitoring.
+output "alert_path" {
+  description = "Topic, Empfaenger und publizierender IAM-User des Alarmwegs"
+  value = {
+    topic_arn = aws_sns_topic.alerts.arn
+    email     = aws_sns_topic_subscription.alerts_email.endpoint
+    publisher = aws_iam_user.alertmanager.name
+  }
+}
