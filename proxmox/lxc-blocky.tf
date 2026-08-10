@@ -150,9 +150,9 @@ resource "proxmox_virtual_environment_container" "blocky" {
   }
 
   memory {
-    # Memory hangs off the blocklists: HaGeZi Pro is around 215k entries. With
-    # the Unbound cache next to it, 1 GB is the size that leaves room for a
-    # larger list.
+    # Memory hangs off the blocklists: the three lists come to around 310k
+    # entries after deduplication. With the Unbound cache next to it, 1 GB is
+    # the size that leaves room for a larger list.
     dedicated = 1024
     swap      = 512
   }
