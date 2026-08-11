@@ -107,10 +107,29 @@ resource "helm_release" "argocd" {
   #
   # server.insecure because Traefik terminates TLS. Without it https runs on
   # https and the ingress returns 502.
+  #
+  # The metrics flags only add the three *-metrics Services; the components
+  # listen on those ports either way, so enabling them restarts nothing. The
+  # matching ServiceMonitors deliberately stay out of this release and live in
+  # kubernetes-homelab/manifests/argocd/: their CRD arrives with
+  # kube-prometheus-stack, which ArgoCD itself rolls out, so a chart that
+  # created them here would fail on a fresh bootstrap.
   set = [
     {
       name  = "global.domain"
       value = var.argocd_domain
+    },
+    {
+      name  = "controller.metrics.enabled"
+      value = "true"
+    },
+    {
+      name  = "repoServer.metrics.enabled"
+      value = "true"
+    },
+    {
+      name  = "server.metrics.enabled"
+      value = "true"
     },
     {
       name  = "configs.cm.url"
