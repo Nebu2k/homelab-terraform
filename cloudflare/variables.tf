@@ -37,9 +37,7 @@ variable "public_hosts" {
   type        = set(string)
   default = [
     "www",
-    "dreambox",
     "homeassistant",
     "plex",
-    "teslamate",
   ]
 }
