@@ -22,8 +22,9 @@ The token in `cloudflare/` only covers elmstreet79.de, this stack needs one
 across every zone in `var.sites`:
 
 - Zone, Zone, Read
-- Zone, Dynamic Redirect, Edit (the permission behind Single Redirects; some
-  accounts list it under Transform Rules)
+- **Zone, Single Redirect, Edit.** Not "Transform Rules", which covers a
+  different ruleset phase and leaves every read on a redirect ruleset answering
+  "request is not authorized" while still happily listing them.
 - Zone Resources: include every zone listed in `terraform.tfvars`
 
 Put it in `terraform.tfvars`, which is gitignored. `terraform.tfvars.example`
