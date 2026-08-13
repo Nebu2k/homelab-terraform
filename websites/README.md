@@ -9,12 +9,21 @@ about homelab exposure and holds a token for a single zone.
 **Does:** the canonical host redirect per zone, a 301 from `www` to the apex or
 the other way round, whichever `canonical` says.
 
-**Does not:** deploy anything. There is no provider resource for the
-repo-to-Worker build connection, so hooking a repo up stays a job in the
-dashboard, and the script upload of a static-assets Worker belongs to wrangler.
+**Does not:** deploy anything. Since 2026-08-13 every site deploys itself from
+`.github/workflows/deploy.yml` in its own repo, all five identical, with
+`wrangler deploy` and a token in the repo secret `CF_API_TOKEN`. Cloudflare's
+own build integration is not used any more: it could not be expressed in code
+and handed out a per-project build token that only two of the five ever had.
+
 Custom domains are deliberately left in each repo's `wrangler.jsonc` as well,
 next to the code they belong to. Managing them here too would only make
 Terraform and wrangler fight over the same record.
+
+**Both hostnames never belong to the Worker.** Only the canonical one is a
+custom domain; the other keeps a plain proxied record so the redirect rule in
+this stack can answer it. Declaring both makes every deploy fail with error
+100117, wrangler refuses to overwrite a record it did not create. That is what
+broke homeworx.solutions when the workflows went in.
 
 ## Token
 
