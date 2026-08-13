@@ -24,7 +24,7 @@ resource "cloudflare_zone_settings_override" "site" {
     min_tls_version = "1.2"
 
     security_header {
-      enabled = true
+      enabled            = true
       max_age            = 31536000
       include_subdomains = each.value.hsts_subdomains
       nosniff            = true
