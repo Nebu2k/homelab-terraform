@@ -21,10 +21,7 @@ resource "cloudflare_record" "public" {
   comment = "managed-by: terraform (public exposure)"
 }
 
-# The apex and www are custom domains on the elmstreet79-de Worker and their
-# records belong to Cloudflare, so there is no resource for them here. Inside
-# the house nothing changed: blocky still maps the apex to Traefik, which 301s
-# it to www, and www gets a zone entry pointing at the worker.
+# The apex and www are custom domains on the elmstreet79-de Worker, so
+# Cloudflare owns those records and there is no resource for them here.
 #
-# The mail records (MX, TXT, DKIM) are hand-made and stay that way, Terraform
-# never managed them.
+# The mail records (MX, TXT, DKIM) are hand-made and stay that way.

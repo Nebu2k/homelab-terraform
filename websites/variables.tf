@@ -15,22 +15,18 @@ variable "cloudflare_api_token" {
 # ===========================================
 
 # One entry per website. `canonical` decides which of the two hostnames wins;
-# the other one gets a 301 to it. The sites themselves are deployed by
-# Cloudflare's own build integration from their GitHub repo, which Terraform
-# cannot express: there is no resource for the repo-to-Worker connection, and
-# the script upload of a static-assets Worker belongs to wrangler. What lives
-# here is the wiring around it.
+# the other one gets a 301 to it. Deploys are not in scope here: they run from
+# each repo's GitHub Action, and there is no provider resource for a worker's
+# repo connection anyway.
 variable "sites" {
   description = "Websites by domain, with the hostname that should win"
   type = map(object({
     zone_id   = string
     canonical = string # "apex" or "www"
 
-    # HSTS with includeSubDomains. The header is sent for the website, but the
-    # browser applies it to every subdomain of the zone, so a zone that carries
-    # more than the website has to opt out: one service that speaks plain HTTP
-    # would become unreachable, and stay so for the max-age even after the
-    # setting is taken back.
+    # HSTS with includeSubDomains. Browsers apply it to every subdomain of the
+    # zone, so a zone carrying more than the website has to opt out: a service
+    # on plain HTTP would be unreachable, and stay so for the max-age.
     hsts_subdomains = optional(bool, true)
   }))
 

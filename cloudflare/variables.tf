@@ -34,9 +34,8 @@ variable "dyndns_target" {
 # through the split-horizon wildcard rewrite that points *.<domain> at Traefik.
 #
 # `www` and the apex are NOT in here: they are custom domains on the
-# elmstreet79-de Worker, and Cloudflare owns those records. A record of ours on
-# the same name makes the Worker deploy fail, wrangler refuses to overwrite one
-# it did not create.
+# elmstreet79-de Worker. A record of ours on the same name breaks its deploy,
+# wrangler refuses to overwrite a record it did not create.
 variable "public_hosts" {
   description = "Subdomains exposed to the internet via the single 80/443 port-forward"
   type        = set(string)

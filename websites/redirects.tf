@@ -6,10 +6,8 @@
 # canonical one. Both hostnames have to exist as custom domains on the Worker,
 # otherwise the losing one never reaches Cloudflare and the rule cannot fire.
 #
-# The wording matches the four rules that were made by hand, so importing them
-# produces no diff. That is also why preserve_query_string stays false: the
-# wildcard match carries the query string in ${1} already, and turning the flag
-# on would append it a second time.
+# preserve_query_string stays false on purpose: the wildcard match already
+# carries the query string in ${1}, the flag would append it a second time.
 
 locals {
   canonical_host = {
@@ -22,9 +20,8 @@ locals {
     domain => site.canonical == "www" ? domain : "www.${domain}"
   }
 
-  # www -> apex is worded generically as "https://www.*", the way the existing
-  # rules do it. apex -> www has to name the host, otherwise the pattern would
-  # match its own target and loop.
+  # apex -> www has to name the host; a generic "https://www.*" would match its
+  # own target and loop.
   # $${1} escapes the HCL interpolation; Cloudflare gets a literal ${1}.
   match_pattern = {
     for domain, site in var.sites :
