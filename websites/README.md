@@ -73,7 +73,7 @@ differently, and that is worth reading before applying: the wording is the rule.
 five zones. It was generated from the live zones, so adopting them changed
 nothing beyond the one intended edit below.
 
-Four traps are worked into the file, each of them found by breaking something:
+Three traps are worked into the file, each of them found by breaking something:
 
 - **Records with `meta.read_only` do not belong here.** Email Routing owns the
   apex MX and the `cf2024-1._domainkey` of seb-it.com, and the API answers
@@ -88,12 +88,17 @@ Four traps are worked into the file, each of them found by breaking something:
   convention.** The zones mix TTL 1 and 3600 and some records already carry a
   comment. Normalising them would touch 23 records for no reason and bury the
   one change that matters in the noise.
-- **TXT values go in unquoted.** The API returns them quoted and splits
-  anything over 255 characters into several quoted strings, so a naive read
-  leaves a `" "` sitting in the middle of a long DKIM key. What is stored is
-  the concatenation without quotes, which is what `dig` shows. The import
-  writes the quoted form into state and every TXT record shows a diff because
-  of it; the first apply settles that and does not come back.
+- **TXT values carry their own quotes.** Cloudflare accepts both forms and
+  resolves them identically, but it stores what it is given, and the dashboard
+  flags an unquoted value. Quoted keeps every record in a zone looking the
+  same. Careful when reading them back: the API splits anything over 255
+  characters into several quoted strings, so stripping only the outer pair
+  leaves a `" "` sitting in the middle of a long DKIM key.
+
+There is no `*._domainkey` with an empty `p=` any more. A revoked wildcard key
+and a missing record are the same PERMFAIL to a verifier (RFC 6376 §6.1.2), so
+it bought nothing, and it answered for every selector that has no record of its
+own, which hides whether a selector exists at all.
 
 The one intended change on adoption was the apex SPF of haushelden-service.de
 and homeworx.solutions. Both listed `amazonses.com` and `_spf.mx.cloudflare.net`

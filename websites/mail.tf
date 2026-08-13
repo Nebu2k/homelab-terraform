@@ -60,14 +60,14 @@ locals {
       zone_key = "elmstreet79.de"
       name     = "_dmarc"
       type     = "TXT"
-      value    = "v=DMARC1; p=reject; rua=mailto:b0e120aa05694979ab0929a1f2519f8d@dmarc-reports.cloudflare.net"
+      value    = "\"v=DMARC1; p=reject; rua=mailto:b0e120aa05694979ab0929a1f2519f8d@dmarc-reports.cloudflare.net\""
       ttl      = 1
     }
     "elmstreet79.de/apple" = {
       zone_key = "elmstreet79.de"
       name     = "elmstreet79.de"
       type     = "TXT"
-      value    = "apple-domain=Am5ovavCqA97HOC1"
+      value    = "\"apple-domain=Am5ovavCqA97HOC1\""
       ttl      = 3600
       comment  = "iCloud Email"
     }
@@ -75,7 +75,7 @@ locals {
       zone_key = "elmstreet79.de"
       name     = "elmstreet79.de"
       type     = "TXT"
-      value    = "v=spf1 include:icloud.com ~all"
+      value    = "\"v=spf1 include:icloud.com ~all\""
       ttl      = 3600
       comment  = "SPF"
     }
@@ -131,25 +131,18 @@ locals {
       ttl      = 1
       priority = 10
     }
-    "haushelden-service.de/dkim-domainkey" = {
-      zone_key = "haushelden-service.de"
-      name     = "*._domainkey"
-      type     = "TXT"
-      value    = "v=DKIM1; p="
-      ttl      = 1
-    }
     "haushelden-service.de/dmarc-dmarc" = {
       zone_key = "haushelden-service.de"
       name     = "_dmarc"
       type     = "TXT"
-      value    = "v=DMARC1; p=reject; sp=reject; adkim=s; aspf=r; rua=mailto:f587ce0e3e884db390506893466f2e85@dmarc-reports.cloudflare.net"
+      value    = "\"v=DMARC1; p=reject; sp=reject; adkim=s; aspf=r; rua=mailto:f587ce0e3e884db390506893466f2e85@dmarc-reports.cloudflare.net\""
       ttl      = 1
     }
     "haushelden-service.de/apple" = {
       zone_key = "haushelden-service.de"
       name     = "haushelden-service.de"
       type     = "TXT"
-      value    = "apple-domain=YItF3tz3QEkStemT"
+      value    = "\"apple-domain=YItF3tz3QEkStemT\""
       ttl      = 3600
     }
     "haushelden-service.de/spf" = {
@@ -158,14 +151,14 @@ locals {
       zone_key = "haushelden-service.de"
       name     = "haushelden-service.de"
       type     = "TXT"
-      value    = "v=spf1 include:icloud.com ~all"
+      value    = "\"v=spf1 include:icloud.com ~all\""
       ttl      = 3600
     }
     "haushelden-service.de/spf-mail" = {
       zone_key = "haushelden-service.de"
       name     = "mail"
       type     = "TXT"
-      value    = "v=spf1 include:amazonses.com ~all"
+      value    = "\"v=spf1 include:amazonses.com ~all\""
       ttl      = 1
     }
     "homeworx.solutions/dkim-5xwzbj3kr7oizwrjg6z5shdts6iezkqn-domainkey" = {
@@ -220,25 +213,18 @@ locals {
       ttl      = 1
       priority = 10
     }
-    "homeworx.solutions/dkim-domainkey" = {
-      zone_key = "homeworx.solutions"
-      name     = "*._domainkey"
-      type     = "TXT"
-      value    = "v=DKIM1; p="
-      ttl      = 1
-    }
     "homeworx.solutions/dmarc-dmarc" = {
       zone_key = "homeworx.solutions"
       name     = "_dmarc"
       type     = "TXT"
-      value    = "v=DMARC1; p=reject; sp=reject; adkim=s; aspf=r; rua=mailto:b1a131acb9b04de18876c30c5d3887c4@dmarc-reports.cloudflare.net"
+      value    = "\"v=DMARC1; p=reject; sp=reject; adkim=s; aspf=r; rua=mailto:b1a131acb9b04de18876c30c5d3887c4@dmarc-reports.cloudflare.net\""
       ttl      = 1
     }
     "homeworx.solutions/apple" = {
       zone_key = "homeworx.solutions"
       name     = "homeworx.solutions"
       type     = "TXT"
-      value    = "apple-domain=CI3M3Anfs9tu7G10"
+      value    = "\"apple-domain=CI3M3Anfs9tu7G10\""
       ttl      = 3600
     }
     "homeworx.solutions/spf" = {
@@ -247,14 +233,14 @@ locals {
       zone_key = "homeworx.solutions"
       name     = "homeworx.solutions"
       type     = "TXT"
-      value    = "v=spf1 include:icloud.com ~all"
+      value    = "\"v=spf1 include:icloud.com ~all\""
       ttl      = 3600
     }
     "homeworx.solutions/spf-mail" = {
       zone_key = "homeworx.solutions"
       name     = "mail"
       type     = "TXT"
-      value    = "v=spf1 include:amazonses.com ~all"
+      value    = "\"v=spf1 include:amazonses.com ~all\""
       ttl      = 1
     }
     "peters.club/dkim-sig1-domainkey" = {
@@ -284,21 +270,21 @@ locals {
       zone_key = "peters.club"
       name     = "_dmarc"
       type     = "TXT"
-      value    = "v=DMARC1; p=reject; rua=mailto:76f78c60a5ef4ef9a7c5e3844edfbb66@dmarc-reports.cloudflare.net"
+      value    = "\"v=DMARC1; p=reject; rua=mailto:76f78c60a5ef4ef9a7c5e3844edfbb66@dmarc-reports.cloudflare.net\""
       ttl      = 1
     }
     "peters.club/apple" = {
       zone_key = "peters.club"
       name     = "peters.club"
       type     = "TXT"
-      value    = "apple-domain=XS0m3FPUGpBkPZmn"
+      value    = "\"apple-domain=XS0m3FPUGpBkPZmn\""
       ttl      = 3600
     }
     "peters.club/spf" = {
       zone_key = "peters.club"
       name     = "peters.club"
       type     = "TXT"
-      value    = "v=spf1 include:icloud.com ~all"
+      value    = "\"v=spf1 include:icloud.com ~all\""
       ttl      = 3600
     }
     "seb-it.com/dkim-5khisw3yaoxshqgoypyu7eb4qekw7d4p-domainkey" = {
@@ -330,32 +316,25 @@ locals {
       ttl      = 1
       priority = 10
     }
-    "seb-it.com/dkim-domainkey" = {
-      zone_key = "seb-it.com"
-      name     = "*._domainkey"
-      type     = "TXT"
-      value    = "v=DKIM1; p="
-      ttl      = 1
-    }
     "seb-it.com/dmarc-dmarc" = {
       zone_key = "seb-it.com"
       name     = "_dmarc"
       type     = "TXT"
-      value    = "v=DMARC1; p=reject; sp=reject; adkim=s; aspf=r; rua=mailto:b2665cefbafe42d2b469d69cfd1582bc@dmarc-reports.cloudflare.net;"
+      value    = "\"v=DMARC1; p=reject; sp=reject; adkim=s; aspf=r; rua=mailto:b2665cefbafe42d2b469d69cfd1582bc@dmarc-reports.cloudflare.net;\""
       ttl      = 1
     }
     "seb-it.com/spf-mail" = {
       zone_key = "seb-it.com"
       name     = "mail"
       type     = "TXT"
-      value    = "v=spf1 include:amazonses.com ~all"
+      value    = "\"v=spf1 include:amazonses.com ~all\""
       ttl      = 1
     }
     "seb-it.com/spf" = {
       zone_key = "seb-it.com"
       name     = "seb-it.com"
       type     = "TXT"
-      value    = "v=spf1 include:amazonses.com include:_spf.mx.cloudflare.net ~all"
+      value    = "\"v=spf1 include:amazonses.com include:_spf.mx.cloudflare.net ~all\""
       ttl      = 1
     }
   }
