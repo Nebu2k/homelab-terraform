@@ -16,11 +16,10 @@
 #
 # No consumer has s3:DeleteObjectVersion.
 #
-# There is NO aws_iam_access_key resource here. The secret access key would
-# otherwise sit in the Terraform state. The keys are created in the AWS console
-# and brought into the cluster with kubeseal. The Terraform user has no
-# iam:CreateAccessKey, so an aws_iam_access_key added later fails in the apply
-# with AccessDenied.
+# There is NO aws_iam_access_key resource here. The keys are created in the AWS
+# console and brought into the cluster with kubeseal, which Terraform would not
+# do either, so managing them would only add the secrets to the state and to
+# every older version of it. ses-mail.tf is the one exception and says why.
 #
 # The bootstrap policy "terraform-homelab-iam" itself does not live in
 # Terraform, it was created by hand.

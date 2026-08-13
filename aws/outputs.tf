@@ -51,3 +51,53 @@ output "alert_path" {
     publisher = aws_iam_user.alertmanager.name
   }
 }
+
+# Read by the websites stack through terraform_remote_state, which turns the
+# tokens into CNAMEs. Nothing here is sensitive, all of it ends up in the zone.
+output "ses_elmstreet79" {
+  description = "SES identity of elmstreet79.de and the DNS values it depends on"
+  value = {
+    dkim_tokens      = aws_sesv2_email_identity.elmstreet79.dkim_signing_attributes[0].tokens
+    mail_from_domain = aws_sesv2_email_identity_mail_from_attributes.elmstreet79.mail_from_domain
+    mail_from_mx     = "feedback-smtp.${var.ses_region}.amazonses.com"
+    sender           = aws_iam_user.proxmox_mail.name
+  }
+}
+
+output "ses_seb_it" {
+  description = "SES identity of seb-it.com, adopted rather than created"
+  value = {
+    dkim_tokens      = aws_sesv2_email_identity.seb_it.dkim_signing_attributes[0].tokens
+    mail_from_domain = aws_sesv2_email_identity_mail_from_attributes.seb_it.mail_from_domain
+    sender           = aws_iam_user.seb_it_mail.name
+  }
+}
+
+# For the mail client of seb-it.com. The hand made user "seb@seb-it.com" can go
+# once these are in place.
+output "seb_it_smtp_user" {
+  description = "SMTP user of the seb-it.com mail client, the access key id"
+  value       = aws_iam_access_key.seb_it_mail.id
+}
+
+output "seb_it_smtp_password" {
+  description = "SMTP password of the seb-it.com mail client"
+  value       = aws_iam_access_key.seb_it_mail.ses_smtp_password_v4
+  sensitive   = true
+}
+
+# For the sasl_passwd of the Postfix on pve:
+#   terraform output -raw ses_smtp_user
+#   terraform output -raw ses_smtp_password
+# Not sensitive: an access key id identifies, it does not authenticate, and the
+# proxmox stack uses it as a trigger to notice a rotation.
+output "ses_smtp_user" {
+  description = "SMTP user of the Postfix on pve, the access key id"
+  value       = aws_iam_access_key.proxmox_mail.id
+}
+
+output "ses_smtp_password" {
+  description = "SMTP password, derived from the secret key over the SES region"
+  value       = aws_iam_access_key.proxmox_mail.ses_smtp_password_v4
+  sensitive   = true
+}

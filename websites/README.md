@@ -69,11 +69,16 @@ differently, and that is worth reading before applying: the wording is the rule.
 
 ## Mail records
 
-`mail.tf` holds MX, SPF, DMARC and DKIM of all five zones. Four of them run on
+`mail.tf` holds MX, SPF, DMARC and DKIM of all five zones. Three of them run on
 iCloud alone and carry six records each, identical apart from their own keys
-and identifiers. seb-it.com is the exception: it receives through Email
-Routing, which only forwards, so answering as itself needs SES and it keeps the
-MAIL FROM subdomain and the SES DKIM records that the other four no longer have.
+and identifiers. Two send through SES and carry a MAIL FROM subdomain plus
+three SES DKIM CNAMEs on top: seb-it.com, which receives through Email Routing
+and cannot answer as itself otherwise, and elmstreet79.de, whose sender is the
+Postfix on pve.
+
+Their DKIM tokens come from `terraform_remote_state` on the `aws` stack, which
+owns both identities in `aws/ses-mail.tf`. That stack has to be applied first,
+otherwise the output does not exist yet and the plan fails here.
 
 One difference is deliberate and not drift: haushelden-service.de and
 homeworx.solutions carry `sp=reject; adkim=s; aspf=r` in their DMARC, the
@@ -110,8 +115,8 @@ own, which hides whether a selector exists at all.
 The one intended change on adoption was the apex SPF of haushelden-service.de
 and homeworx.solutions. Both listed `amazonses.com` and `_spf.mx.cloudflare.net`
 without either being reachable that way: Email Routing is off on those zones
-(the MX point at iCloud), and SES sends with a custom MAIL FROM, so SPF is
-evaluated against `mail.<domain>` and never against the apex. What remains is
+(the MX point at iCloud), and neither zone has an SES identity, so nothing ever
+sent through Amazon. Both send and receive through iCloud. What remains is
 `v=spf1 include:icloud.com ~all`.
 
 Checking a record after an apply: ask an authoritative nameserver, not

@@ -1,8 +1,11 @@
 # MX, SPF, DMARC and DKIM of every zone in var.sites, minus the records
 # Email Routing owns on seb-it.com: the API rejects every write to those
-# with error 1046. Four zones receive and send through iCloud and carry
-# nothing else. seb-it.com receives through Email Routing, which cannot
-# send, so it alone keeps SES and sends from mail.seb-it.com.
+# with error 1046.
+#
+# Three zones receive and send through iCloud and carry nothing else.
+# seb-it.com receives through Email Routing, which cannot send, and
+# elmstreet79.de sends from the Postfix on pve. Both of those send through SES
+# from their own mail. subdomain.
 
 locals {
   mail_records = {
@@ -48,12 +51,31 @@ locals {
       comment  = "iCloud Email"
     }
     "elmstreet79.de/spf" = {
+      # No include:amazonses.com here: SES sends from mail.elmstreet79.de,
+      # which carries its own record, and SPF checks the envelope sender.
       zone_key = "elmstreet79.de"
       name     = "elmstreet79.de"
       type     = "TXT"
       value    = "\"v=spf1 include:icloud.com ~all\""
       ttl      = 3600
       comment  = "SPF"
+    }
+    # MAIL FROM of the SES identity, see homelab-terraform/aws/ses-mail.tf. The
+    # MX has no recipient behind it, SES only wants it to exist for bounces.
+    "elmstreet79.de/mx-mail" = {
+      zone_key = "elmstreet79.de"
+      name     = "mail"
+      type     = "MX"
+      value    = "feedback-smtp.eu-west-1.amazonses.com"
+      ttl      = 1
+      priority = 10
+    }
+    "elmstreet79.de/spf-mail" = {
+      zone_key = "elmstreet79.de"
+      name     = "mail"
+      type     = "TXT"
+      value    = "\"v=spf1 include:amazonses.com ~all\""
+      ttl      = 1
     }
     "haushelden-service.de/dkim-sig1-domainkey" = {
       zone_key = "haushelden-service.de"
@@ -93,8 +115,6 @@ locals {
       ttl      = 3600
     }
     "haushelden-service.de/spf" = {
-      # No include:amazonses.com here: SES sends from mail.haushelden-service.de, which
-      # carries its own record, and SPF checks the envelope sender.
       zone_key = "haushelden-service.de"
       name     = "haushelden-service.de"
       type     = "TXT"
@@ -139,8 +159,6 @@ locals {
       ttl      = 3600
     }
     "homeworx.solutions/spf" = {
-      # No include:amazonses.com here: SES sends from mail.homeworx.solutions, which
-      # carries its own record, and SPF checks the envelope sender.
       zone_key = "homeworx.solutions"
       name     = "homeworx.solutions"
       type     = "TXT"
@@ -191,27 +209,6 @@ locals {
       value    = "\"v=spf1 include:icloud.com ~all\""
       ttl      = 3600
     }
-    "seb-it.com/dkim-5khisw3yaoxshqgoypyu7eb4qekw7d4p-domainkey" = {
-      zone_key = "seb-it.com"
-      name     = "5khisw3yaoxshqgoypyu7eb4qekw7d4p._domainkey"
-      type     = "CNAME"
-      value    = "5khisw3yaoxshqgoypyu7eb4qekw7d4p.dkim.amazonses.com"
-      ttl      = 1
-    }
-    "seb-it.com/dkim-6wravi266iecnbqwwtiqa74jyjfvvnaf-domainkey" = {
-      zone_key = "seb-it.com"
-      name     = "6wravi266iecnbqwwtiqa74jyjfvvnaf._domainkey"
-      type     = "CNAME"
-      value    = "6wravi266iecnbqwwtiqa74jyjfvvnaf.dkim.amazonses.com"
-      ttl      = 1
-    }
-    "seb-it.com/dkim-adf7ntu4qr3yaczhxhcx5lwvhodri5mb-domainkey" = {
-      zone_key = "seb-it.com"
-      name     = "adf7ntu4qr3yaczhxhcx5lwvhodri5mb._domainkey"
-      type     = "CNAME"
-      value    = "adf7ntu4qr3yaczhxhcx5lwvhodri5mb.dkim.amazonses.com"
-      ttl      = 1
-    }
     "seb-it.com/mx-mail" = {
       zone_key = "seb-it.com"
       name     = "mail"
@@ -242,10 +239,31 @@ locals {
       ttl      = 1
     }
   }
+
+  # Three DKIM CNAMEs per SES identity, token and record name are the same
+  # string. The tokens belong to the identities in the aws stack, listing them
+  # here would mean a DNS change every time one is rotated.
+  ses_dkim_tokens = {
+    "elmstreet79.de" = data.terraform_remote_state.aws.outputs.ses_elmstreet79.dkim_tokens
+    "seb-it.com"     = data.terraform_remote_state.aws.outputs.ses_seb_it.dkim_tokens
+  }
+
+  ses_dkim_records = merge([
+    for domain, tokens in local.ses_dkim_tokens : {
+      for token in tokens :
+      "${domain}/dkim-${token}-domainkey" => {
+        zone_key = domain
+        name     = "${token}._domainkey"
+        type     = "CNAME"
+        value    = "${token}.dkim.amazonses.com"
+        ttl      = 1
+      }
+    }
+  ]...)
 }
 
 resource "cloudflare_record" "mail" {
-  for_each = local.mail_records
+  for_each = merge(local.mail_records, local.ses_dkim_records)
 
   zone_id = var.sites[each.value.zone_key].zone_id
   # The provider keeps a subdomain's name relative ("mail"). A full name forces

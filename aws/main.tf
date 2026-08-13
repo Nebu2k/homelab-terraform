@@ -23,3 +23,15 @@ provider "aws" {
     key_prefixes = ["AKIA"]
   }
 }
+
+# SES sits in Ireland, everything else in Frankfurt. The region is part of the
+# MAIL FROM MX record, so moving it would mean a DNS change on a working
+# sender.
+provider "aws" {
+  alias  = "ireland"
+  region = var.ses_region
+
+  ignore_tags {
+    key_prefixes = ["AKIA"]
+  }
+}
