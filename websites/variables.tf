@@ -25,6 +25,13 @@ variable "sites" {
   type = map(object({
     zone_id   = string
     canonical = string # "apex" or "www"
+
+    # HSTS with includeSubDomains. The header is sent for the website, but the
+    # browser applies it to every subdomain of the zone, so a zone that carries
+    # more than the website has to opt out: one service that speaks plain HTTP
+    # would become unreachable, and stay so for the max-age even after the
+    # setting is taken back.
+    hsts_subdomains = optional(bool, true)
   }))
 
   validation {
