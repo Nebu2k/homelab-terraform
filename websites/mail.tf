@@ -1,7 +1,8 @@
-# MX, SPF, DMARC and DKIM of every zone in var.sites. seb-it.com receives
-# through Cloudflare Email Routing, which cannot send, so it sends through
-# SES from mail.seb-it.com. The other four receive and send through iCloud;
-# their SES records are unused.
+# MX, SPF, DMARC and DKIM of every zone in var.sites, minus the records
+# Email Routing owns on seb-it.com: the API rejects every write to those
+# with error 1046. seb-it.com receives through Email Routing, which cannot
+# send, so it sends through SES from mail.seb-it.com. The other four
+# receive and send through iCloud; their SES records are unused.
 
 locals {
   mail_records = {
@@ -329,30 +330,6 @@ locals {
       ttl      = 1
       priority = 10
     }
-    "seb-it.com/mx-apex" = {
-      zone_key = "seb-it.com"
-      name     = "seb-it.com"
-      type     = "MX"
-      value    = "route1.mx.cloudflare.net"
-      ttl      = 1
-      priority = 100
-    }
-    "seb-it.com/mx-apex-2" = {
-      zone_key = "seb-it.com"
-      name     = "seb-it.com"
-      type     = "MX"
-      value    = "route2.mx.cloudflare.net"
-      ttl      = 1
-      priority = 23
-    }
-    "seb-it.com/mx-apex-3" = {
-      zone_key = "seb-it.com"
-      name     = "seb-it.com"
-      type     = "MX"
-      value    = "route3.mx.cloudflare.net"
-      ttl      = 1
-      priority = 88
-    }
     "seb-it.com/dkim-domainkey" = {
       zone_key = "seb-it.com"
       name     = "*._domainkey"
@@ -365,13 +342,6 @@ locals {
       name     = "_dmarc"
       type     = "TXT"
       value    = "v=DMARC1; p=reject; sp=reject; adkim=s; aspf=r; rua=mailto:b2665cefbafe42d2b469d69cfd1582bc@dmarc-reports.cloudflare.net;"
-      ttl      = 1
-    }
-    "seb-it.com/dkim-cf2024-1-domainkey" = {
-      zone_key = "seb-it.com"
-      name     = "cf2024-1._domainkey"
-      type     = "TXT"
-      value    = "v=DKIM1; h=sha256; k=rsa; p=MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAiweykoi+o48IOGuP7GR3X0MOExCUDY/BCRHoWBnh3rChl7WhdyCxW3jgq1daEjPPqoi7sJvdg5hEQVsgVRQP4DcnQDVjGMbASQtrY4WmB1VebF+RPJB2ECPsEDTpeiI5ZyUAwJaVX7r6bznU67g7LvFq35yIo4sdlmtZGV+i0H4cpYH9+3JJ78km4KXwaf9xUJCWF6nxeD+qG6Fyruw1Qlbds2r85U9dkNDVAS3gioCvELryh1TxKGiVTkg4wqHTyHfWsp7KD3WQHYJn0RyfJJu6YEmL77zonn7p2SRMvTMP3ZEXibnC9gz3nnhR6wcYL8Q7zXypKTMD58bTixDSJwIDAQAB"
       ttl      = 1
     }
     "seb-it.com/spf-mail" = {

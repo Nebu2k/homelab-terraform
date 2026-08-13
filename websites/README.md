@@ -70,12 +70,16 @@ differently, and that is worth reading before applying: the wording is the rule.
 ## Mail records
 
 `mail.tf` holds MX, SPF, DMARC, DKIM and the SES MAIL FROM subdomain of all
-five zones, generated from the live zones so the adoption starts at zero drift.
-`mail-imports.tf` carries an `import` block per record and can be deleted after
-the first successful apply.
+five zones. It was generated from the live zones, so adopting them changed
+nothing beyond the one intended edit below.
 
-Two traps are already worked into the file, both found the hard way:
+Four traps are worked into the file, each of them found by breaking something:
 
+- **Records with `meta.read_only` do not belong here.** Email Routing owns the
+  apex MX and the `cf2024-1._domainkey` of seb-it.com, and the API answers
+  every write to them with `This record is managed by Email Routing (1046)`.
+  They are filtered out rather than listed, so enabling Email Routing on
+  another zone does not reintroduce the problem.
 - **`name` is relative for subdomains, absolute for the apex.** The provider
   stores `mail`, not `mail.seb-it.com`, and a full name forces replacement.
   Terraform then destroys and recreates the MX records of a zone, which is a
@@ -84,18 +88,20 @@ Two traps are already worked into the file, both found the hard way:
   convention.** The zones mix TTL 1 and 3600 and some records already carry a
   comment. Normalising them would touch 23 records for no reason and bury the
   one change that matters in the noise.
-
 - **TXT values go in unquoted.** The API returns them quoted and splits
   anything over 255 characters into several quoted strings, so a naive read
-  leaves a `" "` sitting in the middle of a long DKIM key. What is actually
-  stored is the concatenation without quotes, which is what `dig` shows.
-  Still unverified: the import writes the quoted form into state, so every TXT
-  record shows a diff. Whether the first apply settles that or it turns into a
-  perpetual diff can only be seen once the token can write.
+  leaves a `" "` sitting in the middle of a long DKIM key. What is stored is
+  the concatenation without quotes, which is what `dig` shows. The import
+  writes the quoted form into state and every TXT record shows a diff because
+  of it; the first apply settles that and does not come back.
 
-The only intended change on adoption is the apex SPF of haushelden-service.de
+The one intended change on adoption was the apex SPF of haushelden-service.de
 and homeworx.solutions. Both listed `amazonses.com` and `_spf.mx.cloudflare.net`
 without either being reachable that way: Email Routing is off on those zones
 (the MX point at iCloud), and SES sends with a custom MAIL FROM, so SPF is
 evaluated against `mail.<domain>` and never against the apex. What remains is
 `v=spf1 include:icloud.com ~all`.
+
+Checking a record after an apply: ask an authoritative nameserver, not
+`1.1.1.1`. The resolver caches the old TXT for up to five minutes and makes a
+correct change look like it did not happen.
