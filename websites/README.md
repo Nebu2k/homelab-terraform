@@ -73,7 +73,7 @@ differently, and that is worth reading before applying: the wording is the rule.
 five zones. It was generated from the live zones, so adopting them changed
 nothing beyond the one intended edit below.
 
-Three traps are worked into the file, each of them found by breaking something:
+Four traps are worked into the file, each of them found by breaking something:
 
 - **Records with `meta.read_only` do not belong here.** Email Routing owns the
   apex MX and the `cf2024-1._domainkey` of seb-it.com, and the API answers
