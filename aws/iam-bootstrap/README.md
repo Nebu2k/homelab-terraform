@@ -46,9 +46,8 @@ object action can match. Object access exists for the state bucket alone, and
 `haushelden-wordpress-backup` is out of reach entirely.
 
 **The state lock is an S3 object**, `<key>.tflock` next to the state, so
-`use_lockfile` needs nothing beyond the `StateObjects` statement. The DynamoDB
-table `terraform-state-lock` is left over from the years without locking and is
-referenced by nothing.
+`use_lockfile` needs nothing beyond the `StateObjects` statement. There is no
+DynamoDB anywhere in this account anymore.
 
 **Scoping S3 does not make the backups safe from this key.** Terraform has to be
 able to configure the buckets it manages, so `s3:PutLifecycleConfiguration` and
