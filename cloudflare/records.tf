@@ -21,16 +21,10 @@ resource "cloudflare_record" "public" {
   comment = "managed-by: terraform (public exposure)"
 }
 
-# Apex (bare domain). Cloudflare flattens the CNAME at the zone root to A/AAAA
-# and lets it coexist with the MX and TXT records, so the mail setup is
-# untouched. Traefik redirects the apex host to www with a 301
-# (manifests/landing-page/apex-redirect.yaml).
-resource "cloudflare_record" "apex" {
-  zone_id = var.cloudflare_zone_id
-  name    = var.domain
-  content = var.dyndns_target
-  type    = "CNAME"
-  ttl     = 300
-  proxied = false
-  comment = "managed-by: terraform (apex -> www)"
-}
+# The apex and www are custom domains on the elmstreet79-de Worker and their
+# records belong to Cloudflare, so there is no resource for them here. Inside
+# the house nothing changed: blocky still maps the apex to Traefik, which 301s
+# it to www, and www gets a zone entry pointing at the worker.
+#
+# The mail records (MX, TXT, DKIM) are hand-made and stay that way, Terraform
+# never managed them.

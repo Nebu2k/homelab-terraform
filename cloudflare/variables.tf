@@ -32,11 +32,15 @@ variable "dyndns_target" {
 # Publicly exposed services. Each becomes a CNAME <name>.<domain> -> dyndns_target.
 # Anything not listed here has no public record and resolves only internally,
 # through the split-horizon wildcard rewrite that points *.<domain> at Traefik.
+#
+# `www` and the apex are NOT in here: they are custom domains on the
+# elmstreet79-de Worker, and Cloudflare owns those records. A record of ours on
+# the same name makes the Worker deploy fail, wrangler refuses to overwrite one
+# it did not create.
 variable "public_hosts" {
   description = "Subdomains exposed to the internet via the single 80/443 port-forward"
   type        = set(string)
   default = [
-    "www",
     "homeassistant",
     "plex",
   ]
