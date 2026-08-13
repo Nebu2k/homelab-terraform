@@ -44,6 +44,8 @@ resource "aws_sesv2_email_identity_mail_from_attributes" "elmstreet79" {
 resource "aws_iam_user" "proxmox_mail" {
   name = "homelab-proxmox-mail"
 
+  permissions_boundary = local.homelab_boundary_arn
+
   tags = {
     Name      = "proxmox-ses-sender"
     ManagedBy = "terraform"
@@ -126,6 +128,8 @@ resource "aws_sesv2_email_identity_mail_from_attributes" "seb_it" {
 # until its credentials are out of the mail client.
 resource "aws_iam_user" "seb_it_mail" {
   name = "homelab-seb-it-mail"
+
+  permissions_boundary = local.homelab_boundary_arn
 
   tags = {
     Name      = "seb-it-ses-sender"

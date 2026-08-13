@@ -8,6 +8,8 @@
 #     condition ArnLike iam:PolicyARN = ".../policy/homelab/*".
 #   - Managed policy instead of aws_iam_user_policy: iam:PutUserPolicy is not
 #     granted.
+#   - Every user carries the boundary from iam-permissions-boundary.tf, which
+#     has to name the bucket as well.
 #
 # Permissions consistently sit in two statements: the bare bucket ARN for
 # s3:ListBucket, the bucket ARN with "/*" for everything at object level.
@@ -35,6 +37,8 @@
 
 resource "aws_iam_user" "teslamate_backup" {
   name = "homelab-teslamate-backup"
+
+  permissions_boundary = local.homelab_boundary_arn
 
   tags = {
     Name      = "teslamate-offsite-backup"
@@ -89,6 +93,8 @@ resource "aws_iam_user_policy_attachment" "teslamate_backup" {
 # "s3-backup-credentials" in the paperless-ngx namespace.
 resource "aws_iam_user" "paperless_backup" {
   name = "homelab-paperless-backup"
+
+  permissions_boundary = local.homelab_boundary_arn
 
   tags = {
     Name      = "paperless-offsite-backup"
@@ -146,6 +152,8 @@ resource "aws_iam_user_policy_attachment" "paperless_backup" {
 # reach the cluster through kubeseal.
 resource "aws_iam_user" "home_assistant_backup" {
   name = "homelab-home-assistant-backup"
+
+  permissions_boundary = local.homelab_boundary_arn
 
   tags = {
     Name      = "home-assistant-offsite-backup"
@@ -205,6 +213,8 @@ resource "aws_iam_user_policy_attachment" "home_assistant_backup" {
 # state server-side onto a second key in the same bucket and never deletes.
 resource "aws_iam_user" "home_assistant_archive" {
   name = "homelab-home-assistant-archive"
+
+  permissions_boundary = local.homelab_boundary_arn
 
   tags = {
     Name      = "home-assistant-monthly-archive"
@@ -266,6 +276,8 @@ resource "aws_iam_user_policy_attachment" "home_assistant_archive" {
 resource "aws_iam_user" "etcd_backup" {
   name = "homelab-etcd-backup"
 
+  permissions_boundary = local.homelab_boundary_arn
+
   tags = {
     Name      = "etcd-snapshot-offsite"
     ManagedBy = "terraform"
@@ -322,6 +334,8 @@ resource "aws_iam_user_policy_attachment" "etcd_backup" {
 resource "aws_iam_user" "mealie_backup" {
   name = "homelab-mealie-backup"
 
+  permissions_boundary = local.homelab_boundary_arn
+
   tags = {
     Name      = "mealie-offsite-backup"
     ManagedBy = "terraform"
@@ -377,6 +391,8 @@ resource "aws_iam_user_policy_attachment" "mealie_backup" {
 # the only one allowed to do nothing in them but list.
 resource "aws_iam_user" "backup_monitor" {
   name = "homelab-backup-monitor"
+
+  permissions_boundary = local.homelab_boundary_arn
 
   tags = {
     Name      = "offsite-backup-freshness-probe"

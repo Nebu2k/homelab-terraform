@@ -50,6 +50,8 @@ resource "aws_sns_topic_subscription" "alerts_email" {
 resource "aws_iam_user" "alertmanager" {
   name = "homelab-alertmanager"
 
+  permissions_boundary = local.homelab_boundary_arn
+
   tags = {
     Name      = "alertmanager-sns-publisher"
     ManagedBy = "terraform"
