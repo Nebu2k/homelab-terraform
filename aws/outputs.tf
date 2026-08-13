@@ -24,19 +24,65 @@ output "backup_buckets" {
   }
 }
 
-# Terraform creates no aws_iam_access_key. The keys are generated in the AWS
-# console and brought into the cluster with kubeseal; this output records where
-# each key belongs.
+# Where each backup consumer's key belongs, and which key is currently the
+# right one. Not sensitive: an access key id identifies, it does not
+# authenticate. The matching secrets are in "backup_consumer_secrets".
 output "backup_consumer_users" {
-  description = "IAM user per backup consumer and where its access key belongs"
+  description = "IAM user per backup consumer, its current access key id and where that key belongs"
   value = {
-    (aws_iam_user.teslamate_backup.name)       = "secret s3-teslamate-backup-credentials, namespace teslamate"
-    (aws_iam_user.paperless_backup.name)       = "secret s3-backup-credentials, namespace paperless-ngx"
-    (aws_iam_user.home_assistant_backup.name)  = "HA UI, S3 integration (not in the repo, lives on the Longhorn volume)"
-    (aws_iam_user.home_assistant_archive.name) = "secret s3-archive-credentials, namespace home-assistant"
-    (aws_iam_user.backup_monitor.name)         = "secret s3-backup-monitor-credentials, namespace monitoring"
-    (aws_iam_user.etcd_backup.name)            = "secret etcd-backup-s3, namespace kube-system"
-    (aws_iam_user.mealie_backup.name)          = "secret s3-mealie-backup-credentials, namespace mealie"
+    (aws_iam_user.teslamate_backup.name) = {
+      access_key_id = aws_iam_access_key.teslamate_backup.id
+      target        = "secret s3-teslamate-backup-credentials, namespace teslamate"
+    }
+    (aws_iam_user.paperless_backup.name) = {
+      access_key_id = aws_iam_access_key.paperless_backup.id
+      target        = "secret s3-backup-credentials, namespace paperless-ngx"
+    }
+    (aws_iam_user.home_assistant_backup.name) = {
+      access_key_id = aws_iam_access_key.home_assistant_backup.id
+      target        = "HA UI, S3 integration (not in the repo, lives on the Longhorn volume)"
+    }
+    (aws_iam_user.home_assistant_archive.name) = {
+      access_key_id = aws_iam_access_key.home_assistant_archive.id
+      target        = "secret s3-archive-credentials, namespace home-assistant"
+    }
+    (aws_iam_user.backup_monitor.name) = {
+      access_key_id = aws_iam_access_key.backup_monitor.id
+      target        = "secret s3-backup-monitor-credentials, namespace monitoring"
+    }
+    (aws_iam_user.etcd_backup.name) = {
+      access_key_id = aws_iam_access_key.etcd_backup.id
+      target        = "secret etcd-backup-s3, namespace kube-system"
+    }
+    (aws_iam_user.mealie_backup.name) = {
+      access_key_id = aws_iam_access_key.mealie_backup.id
+      target        = "secret s3-mealie-backup-credentials, namespace mealie"
+    }
+    (aws_iam_user.alertmanager.name) = {
+      access_key_id = aws_iam_access_key.alertmanager.id
+      target        = "secret alertmanager-aws-credentials, namespace monitoring"
+    }
+  }
+}
+
+# The secret halves, for filling the *-unsealed.yaml files before kubeseal:
+#
+#   terraform output -json backup_consumer_secrets
+#
+# One output for all eight rather than one each: after a rotation of several
+# consumers the reseal run wants them together anyway.
+output "backup_consumer_secrets" {
+  description = "Secret access key per backup consumer"
+  sensitive   = true
+  value = {
+    (aws_iam_user.teslamate_backup.name)       = aws_iam_access_key.teslamate_backup.secret
+    (aws_iam_user.paperless_backup.name)       = aws_iam_access_key.paperless_backup.secret
+    (aws_iam_user.home_assistant_backup.name)  = aws_iam_access_key.home_assistant_backup.secret
+    (aws_iam_user.home_assistant_archive.name) = aws_iam_access_key.home_assistant_archive.secret
+    (aws_iam_user.backup_monitor.name)         = aws_iam_access_key.backup_monitor.secret
+    (aws_iam_user.etcd_backup.name)            = aws_iam_access_key.etcd_backup.secret
+    (aws_iam_user.mealie_backup.name)          = aws_iam_access_key.mealie_backup.secret
+    (aws_iam_user.alertmanager.name)           = aws_iam_access_key.alertmanager.secret
   }
 }
 

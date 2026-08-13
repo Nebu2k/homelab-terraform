@@ -118,11 +118,20 @@ of them gets `DeleteObjectVersion`. On the versioned buckets that is what makes
 versioning worth something: a compromised cluster can hide a backup behind a
 delete marker, but it cannot destroy it.
 
-**The backup consumers have no `aws_iam_access_key` resource.** Their keys are
-created in the console and delivered into the cluster with `kubeseal`, which
-Terraform would not do either, so managing them would only put the secrets into
-the state and, because the bucket is versioned, into every older version of it.
-The two SES senders are the exception, see below.
+**Every access key is a Terraform resource**, the eight backup and alert
+consumers in `iam-access-keys.tf` and the two SES senders alongside their
+identities. The price is that both halves of each key sit in the state, and
+because the state bucket is versioned, a rotation only stops the current version
+from naming the old secret, it never removes it. What it buys is one place that
+says which key is current and where it belongs. `terraform output -json
+backup_consumer_secrets` is what fills the `*-unsealed.yaml` files before
+`kubeseal`; the Home Assistant backup integration is the one consumer whose key
+is typed in by hand instead.
+
+Rotating one consumer is `terraform apply -replace=aws_iam_access_key.<name>`.
+That deletes the old key in the same apply, so reseal right after: every
+consumer is a CronJob or a retrying sidecar, so the gap costs a run at most, but
+it should not land in a backup window.
 
 The bootstrap policy of the Terraform user is out of band by necessity:
 Terraform cannot grant itself its own permissions.
@@ -137,11 +146,12 @@ MAIL FROM: elmstreet79.de for the Postfix on the Proxmox host, seb-it.com for
 the mail client, because Cloudflare Email Routing only forwards and cannot send.
 The matching DNS records live in the `websites` stack.
 
-These two do carry an `aws_iam_access_key`. SMTP does not take the secret key
-but an HMAC of it over the region, and Terraform is the only thing here that
-derives it; the SES console would instead create an IAM user of its own. The
-alias `aws.ireland` on those resources is what decides the region of that HMAC,
-IAM being global does not change it.
+Their access keys sit next to the identities rather than in
+`iam-access-keys.tf`, because they are not plain keys: SMTP does not take the
+secret key but an HMAC of it over the region, and Terraform is the only thing
+here that derives it; the SES console would instead create an IAM user of its
+own. The alias `aws.ireland` on those resources is what decides the region of
+that HMAC, IAM being global does not change it.
 
 ## argocd-talos/
 

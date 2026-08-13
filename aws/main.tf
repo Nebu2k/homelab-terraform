@@ -14,14 +14,6 @@ terraform {
 # here and no variable for key/secret.
 provider "aws" {
   region = var.aws_region
-
-  # The "description" AWS asks for when creating an access key in the console
-  # ends up as a tag on the IAM user, with the key id as the tag name.
-  # Terraform manages the user tags and would otherwise remove them as drift.
-  # The tag names change on every rotation, hence a prefix rather than a list.
-  ignore_tags {
-    key_prefixes = ["AKIA"]
-  }
 }
 
 # SES sits in Ireland, everything else in Frankfurt. The region is part of the
@@ -30,8 +22,4 @@ provider "aws" {
 provider "aws" {
   alias  = "ireland"
   region = var.ses_region
-
-  ignore_tags {
-    key_prefixes = ["AKIA"]
-  }
 }

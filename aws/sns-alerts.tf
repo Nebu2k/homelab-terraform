@@ -45,9 +45,8 @@ resource "aws_sns_topic_subscription" "alerts_email" {
 
 # The consumer is the Alertmanager (kubernetes-homelab/manifests/
 # kube-prometheus-stack/values.yaml), secret "alertmanager-aws-credentials" in
-# the monitoring namespace. As with the backup consumers, the access key is
-# created in the console and brought into the cluster with kubeseal, so there
-# is no aws_iam_access_key resource here either.
+# the monitoring namespace. Its access key is in iam-access-keys.tf, next to
+# those of the backup consumers.
 resource "aws_iam_user" "alertmanager" {
   name = "homelab-alertmanager"
 

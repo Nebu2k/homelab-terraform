@@ -75,14 +75,10 @@ resource "aws_iam_user_policy_attachment" "proxmox_mail" {
   policy_arn = aws_iam_policy.proxmox_mail.arn
 }
 
-# The only access key in this stack, unlike the backup consumers whose keys are
-# created in the console. SMTP does not take the secret key itself but an HMAC
-# of it over the region, and Terraform is the only thing here that derives it.
-# The alternative is the SES console, which creates an IAM user of its own and
-# would sidestep the user above.
-#
-# Both values end up in the state, and the bucket has versioning, so a rotation
-# leaves the old secret in older versions.
+# SMTP does not take the secret key itself but an HMAC of it over the region,
+# and Terraform is the only thing here that derives it. The alternative is the
+# SES console, which creates an IAM user of its own and would sidestep the user
+# above.
 #
 # The provider alias matters even though IAM is global: ses_smtp_password_v4 is
 # an HMAC over the provider's region. Derived in Frankfurt it is rejected by
