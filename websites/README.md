@@ -1,0 +1,52 @@
+# websites
+
+The wiring around the personal and business websites, all of them Astro on
+Cloudflare Workers with static assets. Separate from `cloudflare/`, which is
+about homelab exposure and holds a token for a single zone.
+
+## What Terraform does and does not do here
+
+**Does:** the canonical host redirect per zone, a 301 from `www` to the apex or
+the other way round, whichever `canonical` says.
+
+**Does not:** deploy anything. There is no provider resource for the
+repo-to-Worker build connection, so hooking a repo up stays a job in the
+dashboard, and the script upload of a static-assets Worker belongs to wrangler.
+Custom domains are deliberately left in each repo's `wrangler.jsonc` as well,
+next to the code they belong to. Managing them here too would only make
+Terraform and wrangler fight over the same record.
+
+## Token
+
+The token in `cloudflare/` only covers elmstreet79.de, this stack needs one
+across every zone in `var.sites`:
+
+- Zone, Zone, Read
+- Zone, Dynamic Redirect, Edit (the permission behind Single Redirects; some
+  accounts list it under Transform Rules)
+- Zone Resources: include every zone listed in `terraform.tfvars`
+
+Put it in `terraform.tfvars`, which is gitignored. `terraform.tfvars.example`
+shows the shape.
+
+## Adopting rules that already exist
+
+seb-it.com, homeworx.solutions and haushelden-service.de were clicked together
+by hand and have a redirect already. Import it instead of applying over it,
+otherwise the rule is dropped and recreated and the site 404s in between:
+
+```sh
+terraform import 'cloudflare_ruleset.canonical_redirect["seb-it.com"]' zone/<zone_id>/<ruleset_id>
+```
+
+The ruleset id comes from the API, there is no way to see it in the dashboard:
+
+```sh
+curl -s -H "Authorization: Bearer $TOKEN" \
+  "https://api.cloudflare.com/client/v4/zones/<zone_id>/rulesets" \
+  | python3 -m json.tool | grep -B3 http_request_dynamic_redirect
+```
+
+Run `terraform plan` after every import and expect it to come back clean. A
+diff on `expression` or `target_url` means the hand-made rule was worded
+differently, and that is worth reading before applying: the wording is the rule.

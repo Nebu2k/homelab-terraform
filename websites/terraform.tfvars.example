@@ -1,0 +1,25 @@
+cloudflare_api_token = "..."
+
+# zone_id steht im Cloudflare-Dashboard rechts unten auf der Zonen-Übersicht.
+sites = {
+  "elmstreet79.de" = {
+    zone_id   = "ee6597dea58f18ca57987dd261e736f4"
+    canonical = "www"
+  }
+  "seb-it.com" = {
+    zone_id   = "..."
+    canonical = "apex"
+  }
+  "homeworx.solutions" = {
+    zone_id   = "..."
+    canonical = "apex"
+  }
+  "haushelden-service.de" = {
+    zone_id   = "..."
+    canonical = "apex"
+  }
+  "peters.club" = {
+    zone_id   = "..."
+    canonical = "apex"
+  }
+}
