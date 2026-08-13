@@ -232,10 +232,12 @@ locals {
       ttl      = 1
     }
     "seb-it.com/spf" = {
+      # No include at the apex: SES sends from mail.seb-it.com, and Email
+      # Routing only forwards, rewriting the return path to its own domain.
       zone_key = "seb-it.com"
       name     = "seb-it.com"
       type     = "TXT"
-      value    = "\"v=spf1 include:amazonses.com include:_spf.mx.cloudflare.net ~all\""
+      value    = "\"v=spf1 ~all\""
       ttl      = 1
     }
   }
