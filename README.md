@@ -11,15 +11,19 @@ workstation.
 
 ## Stacks
 
-Four independent root modules, each with its own state file. There are no
-cross-stack `remote_state` lookups.
+Five independent root modules, each with its own state file.
 
 | Stack | Manages | Provider |
 | ----- | ------- | -------- |
-| [`proxmox/`](proxmox/) | The Talos control plane VM on the Proxmox host | `bpg/proxmox` |
+| [`proxmox/`](proxmox/) | The Talos control plane VM and the Postfix relay on the Proxmox host | `bpg/proxmox` |
 | [`cloudflare/`](cloudflare/) | Public DNS records for the exposed services | `cloudflare/cloudflare` |
-| [`aws/`](aws/) | S3 buckets and IAM users for the offsite backups | `hashicorp/aws` |
+| [`websites/`](websites/) | Redirects and mail records of the five website zones | `cloudflare/cloudflare` |
+| [`aws/`](aws/) | S3 buckets, IAM users and the SES identities | `hashicorp/aws` |
 | [`argocd-talos/`](argocd-talos/) | The ArgoCD release that bootstraps the cluster | `hashicorp/helm` |
+
+Two of them read the `aws` state through `terraform_remote_state`: `websites`
+for the DKIM tokens of the SES identities, `proxmox` for the SMTP credentials
+of the relay. Both need `aws` applied first.
 
 State lives in a versioned S3 bucket, one key per stack
 (`homelab/<stack>/terraform.tfstate`). The bucket is not managed here.
@@ -33,7 +37,7 @@ else.
 ## Usage
 
 ```bash
-cd aws          # or cloudflare, proxmox, argocd-talos
+cd aws          # or cloudflare, websites, proxmox, argocd-talos
 terraform init
 terraform plan
 terraform apply
@@ -42,7 +46,7 @@ terraform apply
 Credentials are not in the repo:
 
 * **AWS**: taken from the CLI environment (`~/.aws`, profile `default`). The
-  same credentials back the S3 state backend of all four stacks, so there is no
+  same credentials back the S3 state backend of every stack, so there is no
   variable for them.
 * **Proxmox / Cloudflare**: non-secret values go into `terraform.tfvars`
   (gitignored, see the `.example` files), secrets come from `TF_VAR_*`
@@ -114,15 +118,30 @@ of them gets `DeleteObjectVersion`. On the versioned buckets that is what makes
 versioning worth something: a compromised cluster can hide a backup behind a
 delete marker, but it cannot destroy it.
 
-**There is no `aws_iam_access_key` resource.** The secret key would land in the
-state file and the state bucket would become a credential store. Keys are
-created once in the console and delivered into the cluster with `kubeseal`. The
-Terraform user's own bootstrap policy grants no `iam:CreateAccessKey`, so adding
-the resource fails at apply time with `AccessDenied`. That bootstrap policy is
-out of band by necessity: Terraform cannot grant itself its own permissions.
+**The backup consumers have no `aws_iam_access_key` resource.** Their keys are
+created in the console and delivered into the cluster with `kubeseal`, which
+Terraform would not do either, so managing them would only put the secrets into
+the state and, because the bucket is versioned, into every older version of it.
+The two SES senders are the exception, see below.
+
+The bootstrap policy of the Terraform user is out of band by necessity:
+Terraform cannot grant itself its own permissions.
 
 The `outputs.tf` here prints the retention state of every bucket and which
 Kubernetes secret each IAM user's key belongs in.
+
+### SES
+
+Two domains send through SES in `eu-west-1`, both with Easy DKIM and a custom
+MAIL FROM: elmstreet79.de for the Postfix on the Proxmox host, seb-it.com for
+the mail client, because Cloudflare Email Routing only forwards and cannot send.
+The matching DNS records live in the `websites` stack.
+
+These two do carry an `aws_iam_access_key`. SMTP does not take the secret key
+but an HMAC of it over the region, and Terraform is the only thing here that
+derives it; the SES console would instead create an IAM user of its own. The
+alias `aws.ireland` on those resources is what decides the region of that HMAC,
+IAM being global does not change it.
 
 ## argocd-talos/
 

@@ -7,24 +7,22 @@ about homelab exposure and holds a token for a single zone.
 ## What Terraform does and does not do here
 
 **Does:** the canonical host redirect per zone, a 301 from `www` to the apex or
-the other way round, whichever `canonical` says. Since 2026-08-13 also the mail
-records of all five zones, see `mail.tf`.
+the other way round, whichever `canonical` says, and the mail records of all
+five zones in `mail.tf`.
 
-**Does not:** deploy anything. Since 2026-08-13 every site deploys itself from
+**Does not:** deploy anything. Every site deploys itself from
 `.github/workflows/deploy.yml` in its own repo, all five identical, with
 `wrangler deploy` and a token in the repo secret `CF_API_TOKEN`. Cloudflare's
-own build integration is not used any more: it could not be expressed in code
-and handed out a per-project build token that only two of the five ever had.
+own build integration is unused on purpose, it cannot be expressed in code.
 
-Custom domains are deliberately left in each repo's `wrangler.jsonc` as well,
-next to the code they belong to. Managing them here too would only make
-Terraform and wrangler fight over the same record.
+Custom domains stay in each repo's `wrangler.jsonc`, next to the code they
+belong to. Managing them here as well would only make Terraform and wrangler
+fight over the same record.
 
 **Both hostnames never belong to the Worker.** Only the canonical one is a
-custom domain; the other keeps a plain proxied record so the redirect rule in
+custom domain, the other keeps a plain proxied record so the redirect rule in
 this stack can answer it. Declaring both makes every deploy fail with error
-100117, wrangler refuses to overwrite a record it did not create. That is what
-broke homeworx.solutions when the workflows went in.
+100117, wrangler refuses to overwrite a record it did not create.
 
 ## Token
 
@@ -35,11 +33,10 @@ across every zone in `var.sites`:
 - **Zone, Single Redirect, Edit.** Not "Transform Rules", which covers a
   different ruleset phase and leaves every read on a redirect ruleset answering
   "request is not authorized" while still happily listing them.
-- **Zone, DNS, Edit.** Needed since `mail.tf` exists. Read alone is not
-  obvious from the failure: reads succeed, `terraform plan` renders a full and
-  correct diff, and only `apply` fails with `Authentication error (10000)` on
-  every record. The message says "failed to create DNS record" even for records
-  that are being imported and updated, so it points at the wrong thing.
+- **Zone, DNS, Edit.** Read alone fails in a way that points elsewhere: reads
+  succeed, `terraform plan` renders a full and correct diff, and only `apply`
+  fails with `Authentication error (10000)`, reporting "failed to create DNS
+  record" even for records that are only being imported or updated.
 - Zone Resources: include every zone listed in `terraform.tfvars`
 
 Put it in `terraform.tfvars`, which is gitignored. `terraform.tfvars.example`
@@ -47,15 +44,14 @@ shows the shape.
 
 ## Adopting rules that already exist
 
-seb-it.com, homeworx.solutions and haushelden-service.de were clicked together
-by hand and have a redirect already. Import it instead of applying over it,
-otherwise the rule is dropped and recreated and the site 404s in between:
+A zone that already carries a redirect rule has to be imported, not applied
+over, otherwise the rule is dropped and recreated and the site 404s in between:
 
 ```sh
 terraform import 'cloudflare_ruleset.canonical_redirect["seb-it.com"]' zone/<zone_id>/<ruleset_id>
 ```
 
-The ruleset id comes from the API, there is no way to see it in the dashboard:
+The ruleset id comes from the API, the dashboard does not show it:
 
 ```sh
 curl -s -H "Authorization: Bearer $TOKEN" \
@@ -63,9 +59,9 @@ curl -s -H "Authorization: Bearer $TOKEN" \
   | python3 -m json.tool | grep -B3 http_request_dynamic_redirect
 ```
 
-Run `terraform plan` after every import and expect it to come back clean. A
-diff on `expression` or `target_url` means the hand-made rule was worded
-differently, and that is worth reading before applying: the wording is the rule.
+`terraform plan` after an import has to come back clean. A diff on `expression`
+or `target_url` means the existing rule is worded differently, and the wording
+is the rule.
 
 ## Mail records
 
@@ -80,12 +76,11 @@ Their DKIM tokens come from `terraform_remote_state` on the `aws` stack, which
 owns both identities in `aws/ses-mail.tf`. That stack has to be applied first,
 otherwise the output does not exist yet and the plan fails here.
 
-One difference is deliberate and not drift: haushelden-service.de and
-homeworx.solutions carry `sp=reject; adkim=s; aspf=r` in their DMARC, the
-private zones only `p=reject`. Matching them would mean loosening the business
-domains, not tidying them.
+haushelden-service.de and homeworx.solutions carry `sp=reject; adkim=s; aspf=r`
+in their DMARC, the private zones only `p=reject`. Matching them would mean
+loosening the business domains, not tidying them.
 
-Four traps are worked into the file, each of them found by breaking something:
+Four properties of the API shape the file:
 
 - **Records with `meta.read_only` do not belong here.** Email Routing owns the
   apex MX and the `cf2024-1._domainkey` of seb-it.com, and the API answers
@@ -107,17 +102,10 @@ Four traps are worked into the file, each of them found by breaking something:
   characters into several quoted strings, so stripping only the outer pair
   leaves a `" "` sitting in the middle of a long DKIM key.
 
-There is no `*._domainkey` with an empty `p=` any more. A revoked wildcard key
-and a missing record are the same PERMFAIL to a verifier (RFC 6376 §6.1.2), so
-it bought nothing, and it answered for every selector that has no record of its
-own, which hides whether a selector exists at all.
-
-The one intended change on adoption was the apex SPF of haushelden-service.de
-and homeworx.solutions. Both listed `amazonses.com` and `_spf.mx.cloudflare.net`
-without either being reachable that way: Email Routing is off on those zones
-(the MX point at iCloud), and neither zone has an SES identity, so nothing ever
-sent through Amazon. Both send and receive through iCloud. What remains is
-`v=spf1 include:icloud.com ~all`.
+No zone carries a `*._domainkey` with an empty `p=`. To a verifier a revoked
+wildcard key and a missing record are the same PERMFAIL (RFC 6376 §6.1.2), and
+the wildcard answers for every selector without a record of its own, which
+hides whether a selector exists at all.
 
 Checking a record after an apply: ask an authoritative nameserver, not
 `1.1.1.1`. The resolver caches the old TXT for up to five minutes and makes a
