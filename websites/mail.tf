@@ -1,35 +1,11 @@
 # MX, SPF, DMARC and DKIM of every zone in var.sites, minus the records
 # Email Routing owns on seb-it.com: the API rejects every write to those
-# with error 1046. seb-it.com receives through Email Routing, which cannot
-# send, so it sends through SES from mail.seb-it.com. The other four
-# receive and send through iCloud; their SES records are unused.
+# with error 1046. Four zones receive and send through iCloud and carry
+# nothing else. seb-it.com receives through Email Routing, which cannot
+# send, so it alone keeps SES and sends from mail.seb-it.com.
 
 locals {
   mail_records = {
-    "elmstreet79.de/dkim-2uq7sudnyih6jds3tqjkoahluv62ixr3-domainkey" = {
-      zone_key = "elmstreet79.de"
-      name     = "2uq7sudnyih6jds3tqjkoahluv62ixr3._domainkey"
-      type     = "CNAME"
-      value    = "2uq7sudnyih6jds3tqjkoahluv62ixr3.dkim.amazonses.com"
-      ttl      = 1
-      comment  = "Amazon SES"
-    }
-    "elmstreet79.de/dkim-622m63merp3oibyi7hgveurd2ihotgqt-domainkey" = {
-      zone_key = "elmstreet79.de"
-      name     = "622m63merp3oibyi7hgveurd2ihotgqt._domainkey"
-      type     = "CNAME"
-      value    = "622m63merp3oibyi7hgveurd2ihotgqt.dkim.amazonses.com"
-      ttl      = 1
-      comment  = "Amazon SES"
-    }
-    "elmstreet79.de/dkim-ou7mhac4hifcqpacv2m7boh6hnxamsnl-domainkey" = {
-      zone_key = "elmstreet79.de"
-      name     = "ou7mhac4hifcqpacv2m7boh6hnxamsnl._domainkey"
-      type     = "CNAME"
-      value    = "ou7mhac4hifcqpacv2m7boh6hnxamsnl.dkim.amazonses.com"
-      ttl      = 1
-      comment  = "Amazon SES"
-    }
     "elmstreet79.de/dkim-sig1-domainkey" = {
       zone_key = "elmstreet79.de"
       name     = "sig1._domainkey"
@@ -79,27 +55,6 @@ locals {
       ttl      = 3600
       comment  = "SPF"
     }
-    "haushelden-service.de/dkim-bhzh2yjfucuikvcvquhbzinssz4x7g23-domainkey" = {
-      zone_key = "haushelden-service.de"
-      name     = "bhzh2yjfucuikvcvquhbzinssz4x7g23._domainkey"
-      type     = "CNAME"
-      value    = "bhzh2yjfucuikvcvquhbzinssz4x7g23.dkim.amazonses.com"
-      ttl      = 1
-    }
-    "haushelden-service.de/dkim-i7oo3o3x3zt4pxfebqjm24cccgubzyi5-domainkey" = {
-      zone_key = "haushelden-service.de"
-      name     = "i7oo3o3x3zt4pxfebqjm24cccgubzyi5._domainkey"
-      type     = "CNAME"
-      value    = "i7oo3o3x3zt4pxfebqjm24cccgubzyi5.dkim.amazonses.com"
-      ttl      = 1
-    }
-    "haushelden-service.de/dkim-kmb4q4fc4els7dwqpt3iuveqskkzwt65-domainkey" = {
-      zone_key = "haushelden-service.de"
-      name     = "kmb4q4fc4els7dwqpt3iuveqskkzwt65._domainkey"
-      type     = "CNAME"
-      value    = "kmb4q4fc4els7dwqpt3iuveqskkzwt65.dkim.amazonses.com"
-      ttl      = 1
-    }
     "haushelden-service.de/dkim-sig1-domainkey" = {
       zone_key = "haushelden-service.de"
       name     = "sig1._domainkey"
@@ -121,14 +76,6 @@ locals {
       type     = "MX"
       value    = "mx02.mail.icloud.com"
       ttl      = 3600
-      priority = 10
-    }
-    "haushelden-service.de/mx-mail" = {
-      zone_key = "haushelden-service.de"
-      name     = "mail"
-      type     = "MX"
-      value    = "feedback-smtp.eu-west-1.amazonses.com"
-      ttl      = 1
       priority = 10
     }
     "haushelden-service.de/dmarc-dmarc" = {
@@ -154,40 +101,12 @@ locals {
       value    = "\"v=spf1 include:icloud.com ~all\""
       ttl      = 3600
     }
-    "haushelden-service.de/spf-mail" = {
-      zone_key = "haushelden-service.de"
-      name     = "mail"
-      type     = "TXT"
-      value    = "\"v=spf1 include:amazonses.com ~all\""
-      ttl      = 1
-    }
-    "homeworx.solutions/dkim-5xwzbj3kr7oizwrjg6z5shdts6iezkqn-domainkey" = {
-      zone_key = "homeworx.solutions"
-      name     = "5xwzbj3kr7oizwrjg6z5shdts6iezkqn._domainkey"
-      type     = "CNAME"
-      value    = "5xwzbj3kr7oizwrjg6z5shdts6iezkqn.dkim.amazonses.com"
-      ttl      = 1
-    }
-    "homeworx.solutions/dkim-b455avma2wosebivnejgc2nhydgoa5yn-domainkey" = {
-      zone_key = "homeworx.solutions"
-      name     = "b455avma2wosebivnejgc2nhydgoa5yn._domainkey"
-      type     = "CNAME"
-      value    = "b455avma2wosebivnejgc2nhydgoa5yn.dkim.amazonses.com"
-      ttl      = 1
-    }
     "homeworx.solutions/dkim-sig1-domainkey" = {
       zone_key = "homeworx.solutions"
       name     = "sig1._domainkey"
       type     = "CNAME"
       value    = "sig1.dkim.homeworx.solutions.at.icloudmailadmin.com"
       ttl      = 3600
-    }
-    "homeworx.solutions/dkim-t4bcyuw6uoitrsjmzyhgfqqo5lvcut4u-domainkey" = {
-      zone_key = "homeworx.solutions"
-      name     = "t4bcyuw6uoitrsjmzyhgfqqo5lvcut4u._domainkey"
-      type     = "CNAME"
-      value    = "t4bcyuw6uoitrsjmzyhgfqqo5lvcut4u.dkim.amazonses.com"
-      ttl      = 1
     }
     "homeworx.solutions/mx-apex" = {
       zone_key = "homeworx.solutions"
@@ -203,14 +122,6 @@ locals {
       type     = "MX"
       value    = "mx02.mail.icloud.com"
       ttl      = 3600
-      priority = 10
-    }
-    "homeworx.solutions/mx-mail" = {
-      zone_key = "homeworx.solutions"
-      name     = "mail"
-      type     = "MX"
-      value    = "feedback-smtp.eu-west-1.amazonses.com"
-      ttl      = 1
       priority = 10
     }
     "homeworx.solutions/dmarc-dmarc" = {
@@ -235,13 +146,6 @@ locals {
       type     = "TXT"
       value    = "\"v=spf1 include:icloud.com ~all\""
       ttl      = 3600
-    }
-    "homeworx.solutions/spf-mail" = {
-      zone_key = "homeworx.solutions"
-      name     = "mail"
-      type     = "TXT"
-      value    = "\"v=spf1 include:amazonses.com ~all\""
-      ttl      = 1
     }
     "peters.club/dkim-sig1-domainkey" = {
       zone_key = "peters.club"

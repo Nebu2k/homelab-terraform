@@ -69,9 +69,16 @@ differently, and that is worth reading before applying: the wording is the rule.
 
 ## Mail records
 
-`mail.tf` holds MX, SPF, DMARC, DKIM and the SES MAIL FROM subdomain of all
-five zones. It was generated from the live zones, so adopting them changed
-nothing beyond the one intended edit below.
+`mail.tf` holds MX, SPF, DMARC and DKIM of all five zones. Four of them run on
+iCloud alone and carry six records each, identical apart from their own keys
+and identifiers. seb-it.com is the exception: it receives through Email
+Routing, which only forwards, so answering as itself needs SES and it keeps the
+MAIL FROM subdomain and the SES DKIM records that the other four no longer have.
+
+One difference is deliberate and not drift: haushelden-service.de and
+homeworx.solutions carry `sp=reject; adkim=s; aspf=r` in their DMARC, the
+private zones only `p=reject`. Matching them would mean loosening the business
+domains, not tidying them.
 
 Four traps are worked into the file, each of them found by breaking something:
 

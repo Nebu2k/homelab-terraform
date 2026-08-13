@@ -3,21 +3,6 @@
 # the first successful apply.
 
 import {
-  to = cloudflare_record.mail["elmstreet79.de/dkim-2uq7sudnyih6jds3tqjkoahluv62ixr3-domainkey"]
-  id = "ee6597dea58f18ca57987dd261e736f4/c2c94eac4026063ffa0f6cb993f98f2c"
-}
-
-import {
-  to = cloudflare_record.mail["elmstreet79.de/dkim-622m63merp3oibyi7hgveurd2ihotgqt-domainkey"]
-  id = "ee6597dea58f18ca57987dd261e736f4/8d2fdc947fcad805ccfd5bdf23bdaf01"
-}
-
-import {
-  to = cloudflare_record.mail["elmstreet79.de/dkim-ou7mhac4hifcqpacv2m7boh6hnxamsnl-domainkey"]
-  id = "ee6597dea58f18ca57987dd261e736f4/e56688458517e61f4dfc2d955730289c"
-}
-
-import {
   to = cloudflare_record.mail["elmstreet79.de/dkim-sig1-domainkey"]
   id = "ee6597dea58f18ca57987dd261e736f4/5e4fc10445afb8993351561cc138d9dd"
 }
@@ -48,21 +33,6 @@ import {
 }
 
 import {
-  to = cloudflare_record.mail["haushelden-service.de/dkim-bhzh2yjfucuikvcvquhbzinssz4x7g23-domainkey"]
-  id = "5e5804245de271fe91aefc9968ad02e2/1623bca21935d36d4a1790de5aa459bd"
-}
-
-import {
-  to = cloudflare_record.mail["haushelden-service.de/dkim-i7oo3o3x3zt4pxfebqjm24cccgubzyi5-domainkey"]
-  id = "5e5804245de271fe91aefc9968ad02e2/175d717cc3e9509194633a31402e130a"
-}
-
-import {
-  to = cloudflare_record.mail["haushelden-service.de/dkim-kmb4q4fc4els7dwqpt3iuveqskkzwt65-domainkey"]
-  id = "5e5804245de271fe91aefc9968ad02e2/4f806fa23dd4035bea479109139203a3"
-}
-
-import {
   to = cloudflare_record.mail["haushelden-service.de/dkim-sig1-domainkey"]
   id = "5e5804245de271fe91aefc9968ad02e2/7e7016d15143887dafb8499b7b234c1e"
 }
@@ -75,11 +45,6 @@ import {
 import {
   to = cloudflare_record.mail["haushelden-service.de/mx-apex-2"]
   id = "5e5804245de271fe91aefc9968ad02e2/9062ba5a85b10da2a86571c4a9b8d525"
-}
-
-import {
-  to = cloudflare_record.mail["haushelden-service.de/mx-mail"]
-  id = "5e5804245de271fe91aefc9968ad02e2/3b194816936a2d395f52bebf5d5df7cf"
 }
 
 import {
@@ -98,28 +63,8 @@ import {
 }
 
 import {
-  to = cloudflare_record.mail["haushelden-service.de/spf-mail"]
-  id = "5e5804245de271fe91aefc9968ad02e2/bfd3e572e9d5b4cc4cc0a014420b192c"
-}
-
-import {
-  to = cloudflare_record.mail["homeworx.solutions/dkim-5xwzbj3kr7oizwrjg6z5shdts6iezkqn-domainkey"]
-  id = "1723f8e5d1d84346cfad4f9d6fdcbdb5/23472a2e86030258b8d1aa7475b3bd62"
-}
-
-import {
-  to = cloudflare_record.mail["homeworx.solutions/dkim-b455avma2wosebivnejgc2nhydgoa5yn-domainkey"]
-  id = "1723f8e5d1d84346cfad4f9d6fdcbdb5/0893dfc280b83d485aadf33495e3fb14"
-}
-
-import {
   to = cloudflare_record.mail["homeworx.solutions/dkim-sig1-domainkey"]
   id = "1723f8e5d1d84346cfad4f9d6fdcbdb5/5b1af4edfdfd3c11f5946abf740ab6d2"
-}
-
-import {
-  to = cloudflare_record.mail["homeworx.solutions/dkim-t4bcyuw6uoitrsjmzyhgfqqo5lvcut4u-domainkey"]
-  id = "1723f8e5d1d84346cfad4f9d6fdcbdb5/7498b926d823147b4e9c338ee30f55bc"
 }
 
 import {
@@ -130,11 +75,6 @@ import {
 import {
   to = cloudflare_record.mail["homeworx.solutions/mx-apex-2"]
   id = "1723f8e5d1d84346cfad4f9d6fdcbdb5/cd9af13939ddf0cb14cbbc1b91d6a614"
-}
-
-import {
-  to = cloudflare_record.mail["homeworx.solutions/mx-mail"]
-  id = "1723f8e5d1d84346cfad4f9d6fdcbdb5/4b7e41fce245647d52c1d2a26e444d53"
 }
 
 import {
@@ -150,11 +90,6 @@ import {
 import {
   to = cloudflare_record.mail["homeworx.solutions/spf"]
   id = "1723f8e5d1d84346cfad4f9d6fdcbdb5/7446e906b433d4c720946583d364a596"
-}
-
-import {
-  to = cloudflare_record.mail["homeworx.solutions/spf-mail"]
-  id = "1723f8e5d1d84346cfad4f9d6fdcbdb5/6ad491c9b86ec4c526e6776265104458"
 }
 
 import {
