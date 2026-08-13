@@ -1,8 +1,6 @@
-# Generiert aus der Cloudflare-API. Die Records existieren alle schon; ohne
-# diese Bloecke wuerde Terraform sie loeschen und neu anlegen, und dazwischen
-# waere Mail fuer die Zone nicht zustellbar.
-#
-# Nach dem ersten erfolgreichen Apply koennen sie raus.
+# Generated from the live zones. Without these the records would be
+# destroyed and recreated, which is a gap in mail delivery. Delete after
+# the first successful apply.
 
 import {
   to = cloudflare_record.mail["elmstreet79.de/dkim-2uq7sudnyih6jds3tqjkoahluv62ixr3-domainkey"]

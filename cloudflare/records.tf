@@ -24,4 +24,5 @@ resource "cloudflare_record" "public" {
 # The apex and www are custom domains on the elmstreet79-de Worker, so
 # Cloudflare owns those records and there is no resource for them here.
 #
-# The mail records (MX, TXT, DKIM) are hand-made and stay that way.
+# The mail records (MX, TXT, DKIM) of this zone live in the websites stack,
+# next to those of the other four domains, because they are the same setup.

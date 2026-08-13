@@ -1,26 +1,10 @@
-# Mail-Records der fuenf Website-Zonen: MX, SPF, DMARC, DKIM und die
-# SES-MAIL-FROM-Subdomain. Sie lagen bis 2026-08-13 nur im Cloudflare-UI und
-# waren damit weder versioniert noch nachvollziehbar; ein falscher Handgriff an
-# einem SPF-Record faellt sonst erst auf, wenn Mail nicht mehr ankommt.
-#
-# Bewusst NICHT hier drin: google-site-verification (Search Console, keine
-# Mail) und alles, was den Worker bedient (das steht in wrangler.jsonc).
-#
-# Die Zonen tragen zwei verschiedene Mail-Wege. seb-it.com empfaengt ueber
-# Cloudflare Email Routing (MX route1-3.mx.cloudflare.net, eigener
-# cf2024-1-DKIM), die anderen vier ueber iCloud (MX mx01/02.mail.icloud.com,
-# sig1._domainkey als CNAME zu Apple, dazu ein apple-domain-TXT). Versendet
-# wird ueberall ueber AWS SES mit Custom MAIL FROM auf mail.<domain>.
-#
-# Daraus folgt die Regel fuer den Apex-SPF: dort gehoert nur hinein, wer
-# tatsaechlich mit einem Envelope-Absender auf dem Apex sendet. SPF prueft den
-# Return-Path, nicht den From-Header, und der ist bei SES mail.<domain>. Ein
-# include:amazonses.com auf dem Apex wird deshalb nie ausgewertet.
+# MX, SPF, DMARC and DKIM of every zone in var.sites. seb-it.com receives
+# through Cloudflare Email Routing, which cannot send, so it sends through
+# SES from mail.seb-it.com. The other four receive and send through iCloud;
+# their SES records are unused.
 
 locals {
   mail_records = {
-
-    # ---- elmstreet79.de ------------------------------------------------
     "elmstreet79.de/dkim-2uq7sudnyih6jds3tqjkoahluv62ixr3-domainkey" = {
       zone_key = "elmstreet79.de"
       name     = "2uq7sudnyih6jds3tqjkoahluv62ixr3._domainkey"
@@ -94,8 +78,6 @@ locals {
       ttl      = 3600
       comment  = "SPF"
     }
-
-    # ---- haushelden-service.de -----------------------------------------
     "haushelden-service.de/dkim-bhzh2yjfucuikvcvquhbzinssz4x7g23-domainkey" = {
       zone_key = "haushelden-service.de"
       name     = "bhzh2yjfucuikvcvquhbzinssz4x7g23._domainkey"
@@ -170,8 +152,8 @@ locals {
       ttl      = 3600
     }
     "haushelden-service.de/spf" = {
-      # Zurueckgeschnitten: Email Routing ist hier aus und SES
-      # sendet ueber mail.haushelden-service.de.
+      # No include:amazonses.com here: SES sends from mail.haushelden-service.de, which
+      # carries its own record, and SPF checks the envelope sender.
       zone_key = "haushelden-service.de"
       name     = "haushelden-service.de"
       type     = "TXT"
@@ -185,8 +167,6 @@ locals {
       value    = "v=spf1 include:amazonses.com ~all"
       ttl      = 1
     }
-
-    # ---- homeworx.solutions --------------------------------------------
     "homeworx.solutions/dkim-5xwzbj3kr7oizwrjg6z5shdts6iezkqn-domainkey" = {
       zone_key = "homeworx.solutions"
       name     = "5xwzbj3kr7oizwrjg6z5shdts6iezkqn._domainkey"
@@ -261,8 +241,8 @@ locals {
       ttl      = 3600
     }
     "homeworx.solutions/spf" = {
-      # Zurueckgeschnitten: Email Routing ist hier aus und SES
-      # sendet ueber mail.homeworx.solutions.
+      # No include:amazonses.com here: SES sends from mail.homeworx.solutions, which
+      # carries its own record, and SPF checks the envelope sender.
       zone_key = "homeworx.solutions"
       name     = "homeworx.solutions"
       type     = "TXT"
@@ -276,8 +256,6 @@ locals {
       value    = "v=spf1 include:amazonses.com ~all"
       ttl      = 1
     }
-
-    # ---- peters.club ---------------------------------------------------
     "peters.club/dkim-sig1-domainkey" = {
       zone_key = "peters.club"
       name     = "sig1._domainkey"
@@ -322,8 +300,6 @@ locals {
       value    = "v=spf1 include:icloud.com ~all"
       ttl      = 3600
     }
-
-    # ---- seb-it.com ----------------------------------------------------
     "seb-it.com/dkim-5khisw3yaoxshqgoypyu7eb4qekw7d4p-domainkey" = {
       zone_key = "seb-it.com"
       name     = "5khisw3yaoxshqgoypyu7eb4qekw7d4p._domainkey"
@@ -395,7 +371,7 @@ locals {
       zone_key = "seb-it.com"
       name     = "cf2024-1._domainkey"
       type     = "TXT"
-      value    = "v=DKIM1; h=sha256; k=rsa; p=MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAiweykoi+o48IOGuP7GR3X0MOExCUDY/BCRHoWBnh3rChl7WhdyCxW3jgq1daEjPPqoi7sJvdg5hEQVsgVRQP4DcnQDVjGMbASQtrY4WmB1VebF+RPJB2ECPsEDTpeiI5ZyUAwJaVX7r6bznU67g7LvFq35yIo4sdlmtZGV+i0H4cpYH9+3JJ78k\" \"m4KXwaf9xUJCWF6nxeD+qG6Fyruw1Qlbds2r85U9dkNDVAS3gioCvELryh1TxKGiVTkg4wqHTyHfWsp7KD3WQHYJn0RyfJJu6YEmL77zonn7p2SRMvTMP3ZEXibnC9gz3nnhR6wcYL8Q7zXypKTMD58bTixDSJwIDAQAB"
+      value    = "v=DKIM1; h=sha256; k=rsa; p=MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAiweykoi+o48IOGuP7GR3X0MOExCUDY/BCRHoWBnh3rChl7WhdyCxW3jgq1daEjPPqoi7sJvdg5hEQVsgVRQP4DcnQDVjGMbASQtrY4WmB1VebF+RPJB2ECPsEDTpeiI5ZyUAwJaVX7r6bznU67g7LvFq35yIo4sdlmtZGV+i0H4cpYH9+3JJ78km4KXwaf9xUJCWF6nxeD+qG6Fyruw1Qlbds2r85U9dkNDVAS3gioCvELryh1TxKGiVTkg4wqHTyHfWsp7KD3WQHYJn0RyfJJu6YEmL77zonn7p2SRMvTMP3ZEXibnC9gz3nnhR6wcYL8Q7zXypKTMD58bTixDSJwIDAQAB"
       ttl      = 1
     }
     "seb-it.com/spf-mail" = {
@@ -418,14 +394,15 @@ locals {
 resource "cloudflare_record" "mail" {
   for_each = local.mail_records
 
-  zone_id  = var.sites[each.value.zone_key].zone_id
+  zone_id = var.sites[each.value.zone_key].zone_id
+  # The provider keeps a subdomain's name relative ("mail"). A full name forces
+  # replacement, which takes the zone's MX records down while it runs.
   name     = each.value.name
   type     = each.value.type
   content  = each.value.value
   priority = try(each.value.priority, null)
-  # TTL und comment kommen aus dem Bestand, nicht aus einer Konvention: sonst
-  # aendert der erste Apply 23 Records ohne fachlichen Grund und der Plan
-  # verdeckt die eine Aenderung, um die es geht.
+  # ttl and comment follow whatever the records already carry, so that adopting
+  # them changes nothing.
   ttl     = each.value.ttl
   comment = try(each.value.comment, null)
   proxied = false

@@ -85,6 +85,14 @@ Two traps are already worked into the file, both found the hard way:
   comment. Normalising them would touch 23 records for no reason and bury the
   one change that matters in the noise.
 
+- **TXT values go in unquoted.** The API returns them quoted and splits
+  anything over 255 characters into several quoted strings, so a naive read
+  leaves a `" "` sitting in the middle of a long DKIM key. What is actually
+  stored is the concatenation without quotes, which is what `dig` shows.
+  Still unverified: the import writes the quoted form into state, so every TXT
+  record shows a diff. Whether the first apply settles that or it turns into a
+  perpetual diff can only be seen once the token can write.
+
 The only intended change on adoption is the apex SPF of haushelden-service.de
 and homeworx.solutions. Both listed `amazonses.com` and `_spf.mx.cloudflare.net`
 without either being reachable that way: Email Routing is off on those zones
