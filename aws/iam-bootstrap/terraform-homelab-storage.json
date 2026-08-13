@@ -1,0 +1,37 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "ManageOwnBucketsAtBucketLevelOnly",
+      "Effect": "Allow",
+      "Action": [
+        "s3:CreateBucket",
+        "s3:Get*",
+        "s3:Put*",
+        "s3:List*",
+        "s3:Delete*"
+      ],
+      "Resource": [
+        "arn:aws:s3:::homelab-elmstreet79-terraform-state",
+        "arn:aws:s3:::homelab-paperless-backup",
+        "arn:aws:s3:::homelab-homeassistent-elmstreet79",
+        "arn:aws:s3:::homelab-teslamate-backup",
+        "arn:aws:s3:::homelab-etcd-snapshots-elmstreet79",
+        "arn:aws:s3:::homelab-mealie-backup"
+      ]
+    },
+    {
+      "Sid": "StateObjects",
+      "Effect": "Allow",
+      "Action": [
+        "s3:GetObject",
+        "s3:GetObjectVersion",
+        "s3:PutObject",
+        "s3:DeleteObject"
+      ],
+      "Resource": [
+        "arn:aws:s3:::homelab-elmstreet79-terraform-state/*"
+      ]
+    }
+  ]
+}

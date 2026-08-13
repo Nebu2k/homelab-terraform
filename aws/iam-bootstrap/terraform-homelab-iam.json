@@ -1,0 +1,144 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "IamReadForAudit",
+      "Effect": "Allow",
+      "Action": [
+        "iam:Get*",
+        "iam:List*",
+        "iam:SimulatePrincipalPolicy"
+      ],
+      "Resource": "*"
+    },
+    {
+      "Sid": "CreateHomelabUsersWithBoundary",
+      "Effect": "Allow",
+      "Action": [
+        "iam:CreateUser"
+      ],
+      "Resource": "arn:aws:iam::ACCOUNT_ID:user/homelab-*",
+      "Condition": {
+        "StringEquals": {
+          "iam:PermissionsBoundary": "arn:aws:iam::ACCOUNT_ID:policy/homelab-consumer-boundary"
+        }
+      }
+    },
+    {
+      "Sid": "ManageHomelabUsers",
+      "Effect": "Allow",
+      "Action": [
+        "iam:DeleteUser",
+        "iam:TagUser",
+        "iam:UntagUser"
+      ],
+      "Resource": "arn:aws:iam::ACCOUNT_ID:user/homelab-*"
+    },
+    {
+      "Sid": "SetHomelabBoundary",
+      "Effect": "Allow",
+      "Action": [
+        "iam:PutUserPermissionsBoundary"
+      ],
+      "Resource": "arn:aws:iam::ACCOUNT_ID:user/homelab-*",
+      "Condition": {
+        "StringEquals": {
+          "iam:PermissionsBoundary": "arn:aws:iam::ACCOUNT_ID:policy/homelab-consumer-boundary"
+        }
+      }
+    },
+    {
+      "Sid": "NeverRemoveTheBoundary",
+      "Effect": "Deny",
+      "Action": [
+        "iam:DeleteUserPermissionsBoundary"
+      ],
+      "Resource": "*"
+    },
+    {
+      "Sid": "ManageHomelabPolicies",
+      "Effect": "Allow",
+      "Action": [
+        "iam:CreatePolicy",
+        "iam:DeletePolicy",
+        "iam:CreatePolicyVersion",
+        "iam:DeletePolicyVersion",
+        "iam:SetDefaultPolicyVersion",
+        "iam:TagPolicy",
+        "iam:UntagPolicy"
+      ],
+      "Resource": "arn:aws:iam::ACCOUNT_ID:policy/homelab/*"
+    },
+    {
+      "Sid": "AttachOnlyHomelabPolicies",
+      "Effect": "Allow",
+      "Action": [
+        "iam:AttachUserPolicy",
+        "iam:DetachUserPolicy"
+      ],
+      "Resource": "arn:aws:iam::ACCOUNT_ID:user/homelab-*",
+      "Condition": {
+        "ArnLike": {
+          "iam:PolicyARN": "arn:aws:iam::ACCOUNT_ID:policy/homelab/*"
+        },
+        "StringEquals": {
+          "iam:PermissionsBoundary": "arn:aws:iam::ACCOUNT_ID:policy/homelab-consumer-boundary"
+        }
+      }
+    },
+    {
+      "Sid": "ManageHomelabAccessKeys",
+      "Effect": "Allow",
+      "Action": [
+        "iam:CreateAccessKey",
+        "iam:DeleteAccessKey",
+        "iam:UpdateAccessKey"
+      ],
+      "Resource": "arn:aws:iam::ACCOUNT_ID:user/homelab-*"
+    },
+    {
+      "Sid": "ManageAlertTopic",
+      "Effect": "Allow",
+      "Action": [
+        "sns:CreateTopic",
+        "sns:DeleteTopic",
+        "sns:GetTopicAttributes",
+        "sns:SetTopicAttributes",
+        "sns:ListTagsForResource",
+        "sns:TagResource",
+        "sns:UntagResource",
+        "sns:ListSubscriptionsByTopic",
+        "sns:Subscribe"
+      ],
+      "Resource": "arn:aws:sns:eu-central-1:ACCOUNT_ID:homelab"
+    },
+    {
+      "Sid": "ManageAlertSubscription",
+      "Effect": "Allow",
+      "Action": [
+        "sns:GetSubscriptionAttributes",
+        "sns:SetSubscriptionAttributes",
+        "sns:Unsubscribe"
+      ],
+      "Resource": "*"
+    },
+    {
+      "Sid": "ManageSesIdentities",
+      "Effect": "Allow",
+      "Action": [
+        "ses:CreateEmailIdentity",
+        "ses:DeleteEmailIdentity",
+        "ses:GetEmailIdentity",
+        "ses:PutEmailIdentityDkimSigningAttributes",
+        "ses:PutEmailIdentityMailFromAttributes",
+        "ses:TagResource",
+        "ses:UntagResource",
+        "ses:ListTagsForResource"
+      ],
+      "Resource": [
+        "arn:aws:ses:eu-west-1:ACCOUNT_ID:identity/elmstreet79.de",
+        "arn:aws:ses:eu-west-1:ACCOUNT_ID:identity/seb-it.com"
+      ]
+    }
+  ]
+}

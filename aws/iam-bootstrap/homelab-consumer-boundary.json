@@ -1,0 +1,55 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "ListBackupBuckets",
+      "Effect": "Allow",
+      "Action": [
+        "s3:ListBucket"
+      ],
+      "Resource": [
+        "arn:aws:s3:::homelab-paperless-backup",
+        "arn:aws:s3:::homelab-homeassistent-elmstreet79",
+        "arn:aws:s3:::homelab-teslamate-backup",
+        "arn:aws:s3:::homelab-etcd-snapshots-elmstreet79",
+        "arn:aws:s3:::homelab-mealie-backup"
+      ]
+    },
+    {
+      "Sid": "ObjectAccessInBackupBuckets",
+      "Effect": "Allow",
+      "Action": [
+        "s3:GetObject",
+        "s3:PutObject",
+        "s3:DeleteObject",
+        "s3:AbortMultipartUpload"
+      ],
+      "Resource": [
+        "arn:aws:s3:::homelab-paperless-backup/*",
+        "arn:aws:s3:::homelab-homeassistent-elmstreet79/*",
+        "arn:aws:s3:::homelab-teslamate-backup/*",
+        "arn:aws:s3:::homelab-etcd-snapshots-elmstreet79/*",
+        "arn:aws:s3:::homelab-mealie-backup/*"
+      ]
+    },
+    {
+      "Sid": "PublishToAlertTopic",
+      "Effect": "Allow",
+      "Action": [
+        "sns:Publish"
+      ],
+      "Resource": "arn:aws:sns:eu-central-1:ACCOUNT_ID:homelab"
+    },
+    {
+      "Sid": "SendAsOwnIdentities",
+      "Effect": "Allow",
+      "Action": [
+        "ses:SendRawEmail"
+      ],
+      "Resource": [
+        "arn:aws:ses:eu-west-1:ACCOUNT_ID:identity/elmstreet79.de",
+        "arn:aws:ses:eu-west-1:ACCOUNT_ID:identity/seb-it.com"
+      ]
+    }
+  ]
+}
