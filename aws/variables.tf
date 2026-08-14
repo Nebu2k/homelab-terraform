@@ -152,16 +152,3 @@ variable "ses_region" {
   default     = "eu-west-1"
 }
 
-variable "ses_domain" {
-  description = "Domain that SES may send as"
-  type        = string
-  default     = "elmstreet79.de"
-}
-
-# The MX and SPF records for this subdomain live in
-# homelab-terraform/websites/mail.tf, both sides have to match.
-variable "ses_mail_from_domain" {
-  description = "Subdomain SES uses as the envelope sender"
-  type        = string
-  default     = "mail.elmstreet79.de"
-}

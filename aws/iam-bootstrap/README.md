@@ -35,8 +35,8 @@ its bucket in `homelab-consumer-boundary` first and its own policy second,
 otherwise it is without the permission in between. Forgetting the boundary
 answers `AccessDenied` while the Terraform policy looks perfectly correct.
 
-**`homelab-*` is ten users, not the eight in `iam-backup-consumers.tf`.** The two
-SES senders in `ses-mail.tf` carry the prefix too, which is why the boundary
+**`homelab-*` is nine users, not the eight in `iam-backup-consumers.tf`.** The
+SES sender in `ses-mail.tf` carries the prefix too, which is why the boundary
 allows `ses:SendRawEmail`.
 
 **`terraform-homelab-storage` names buckets, not patterns.** A new bucket has to

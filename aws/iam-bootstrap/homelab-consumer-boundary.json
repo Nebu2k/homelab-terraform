@@ -47,7 +47,6 @@
         "ses:SendRawEmail"
       ],
       "Resource": [
-        "arn:aws:ses:eu-west-1:ACCOUNT_ID:identity/elmstreet79.de",
         "arn:aws:ses:eu-west-1:ACCOUNT_ID:identity/seb-it.com"
       ]
     }

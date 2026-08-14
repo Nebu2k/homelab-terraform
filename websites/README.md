@@ -65,15 +65,14 @@ is the rule.
 
 ## Mail records
 
-`mail.tf` holds MX, SPF, DMARC and DKIM of all five zones. Three of them run on
+`mail.tf` holds MX, SPF, DMARC and DKIM of all five zones. Four of them run on
 iCloud alone and carry six records each, identical apart from their own keys
-and identifiers. Two send through SES and carry a MAIL FROM subdomain plus
-three SES DKIM CNAMEs on top: seb-it.com, which receives through Email Routing
-and cannot answer as itself otherwise, and elmstreet79.de, whose sender is the
-Postfix on pve.
+and identifiers. Only seb-it.com sends through SES and carries a MAIL FROM
+subdomain plus three SES DKIM CNAMEs on top, because it receives through Email
+Routing and cannot answer as itself otherwise.
 
-Their DKIM tokens come from `terraform_remote_state` on the `aws` stack, which
-owns both identities in `aws/ses-mail.tf`. That stack has to be applied first,
+Its DKIM tokens come from `terraform_remote_state` on the `aws` stack, which
+owns the identity in `aws/ses-mail.tf`. That stack has to be applied first,
 otherwise the output does not exist yet and the plan fails here.
 
 haushelden-service.de and homeworx.solutions carry `sp=reject; adkim=s; aspf=r`

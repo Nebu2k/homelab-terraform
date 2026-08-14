@@ -15,7 +15,7 @@ Five independent root modules, each with its own state file.
 
 | Stack | Manages | Provider |
 | ----- | ------- | -------- |
-| [`proxmox/`](proxmox/) | The Talos control plane VM and the Postfix relay on the Proxmox host | `bpg/proxmox` |
+| [`proxmox/`](proxmox/) | The Talos control plane VM and the Blocky LXC on the Proxmox host | `bpg/proxmox` |
 | [`cloudflare/`](cloudflare/) | Public DNS records for the exposed services | `cloudflare/cloudflare` |
 | [`websites/`](websites/) | Redirects and mail records of the five website zones | `cloudflare/cloudflare` |
 | [`aws/`](aws/) | S3 buckets, IAM users and the SES identities | `hashicorp/aws` |
@@ -141,17 +141,16 @@ Kubernetes secret each IAM user's key belongs in.
 
 ### SES
 
-Two domains send through SES in `eu-west-1`, both with Easy DKIM and a custom
-MAIL FROM: elmstreet79.de for the Postfix on the Proxmox host, seb-it.com for
-the mail client, because Cloudflare Email Routing only forwards and cannot send.
-The matching DNS records live in the `websites` stack.
+One domain sends through SES in `eu-west-1`, with Easy DKIM and a custom MAIL
+FROM: seb-it.com for the mail client, because Cloudflare Email Routing only
+forwards and cannot send. The matching DNS records live in the `websites` stack.
 
-Their access keys sit next to the identities rather than in
-`iam-access-keys.tf`, because they are not plain keys: SMTP does not take the
-secret key but an HMAC of it over the region, and Terraform is the only thing
-here that derives it; the SES console would instead create an IAM user of its
-own. The alias `aws.ireland` on those resources is what decides the region of
-that HMAC, IAM being global does not change it.
+Its access key sits next to the identity rather than in `iam-access-keys.tf`,
+because it is not a plain key: SMTP does not take the secret key but an HMAC of
+it over the region, and Terraform is the only thing here that derives it; the
+SES console would instead create an IAM user of its own. The alias
+`aws.ireland` on those resources is what decides the region of that HMAC, IAM
+being global does not change it.
 
 ## argocd-talos/
 
