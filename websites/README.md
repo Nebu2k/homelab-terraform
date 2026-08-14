@@ -42,6 +42,11 @@ across every zone in `var.sites`:
 Put it in `terraform.tfvars`, which is gitignored. `terraform.tfvars.example`
 shows the shape.
 
+`both_hosts_on_worker` takes `/.well-known/security.txt` out of the redirect so
+the file answers 200 on both hostnames. It only holds where both are custom
+domains on the Worker, which is elmstreet79.de alone; anywhere else the request
+skips the redirect and reaches nothing.
+
 ## Adopting rules that already exist
 
 A zone that already carries a redirect rule has to be imported, not applied

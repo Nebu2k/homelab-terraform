@@ -3,8 +3,10 @@ cloudflare_api_token = "..."
 # zone_id steht im Cloudflare-Dashboard rechts unten auf der Zonen-Übersicht.
 sites = {
   "elmstreet79.de" = {
-    zone_id   = "ee6597dea58f18ca57987dd261e736f4"
-    canonical = "www"
+    zone_id              = "ee6597dea58f18ca57987dd261e736f4"
+    canonical            = "www"
+    hsts_subdomains      = false
+    both_hosts_on_worker = true
   }
   "seb-it.com" = {
     zone_id   = "..."

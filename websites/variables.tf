@@ -28,6 +28,10 @@ variable "sites" {
     # zone, so a zone carrying more than the website has to opt out: a service
     # on plain HTTP would be unreachable, and stay so for the max-age.
     hsts_subdomains = optional(bool, true)
+
+    # Whether the redirected hostname is a custom domain on the Worker as well.
+    # Only then can the redirect skip a path and still be answered.
+    both_hosts_on_worker = optional(bool, false)
   }))
 
   validation {

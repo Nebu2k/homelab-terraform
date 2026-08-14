@@ -32,6 +32,14 @@ locals {
     for domain, site in var.sites :
     domain => site.canonical == "apex" ? "https://$${1}" : "https://www.${domain}/$${1}"
   }
+
+  # A 301 is not a security.txt to a scanner, so the file has to answer 200 on
+  # the redirected hostname too. Needs both_hosts_on_worker, otherwise the
+  # request skips the redirect and reaches nothing.
+  security_txt_exception = {
+    for domain, site in var.sites :
+    domain => site.both_hosts_on_worker ? " and not http.request.uri.path eq \"/.well-known/security.txt\"" : ""
+  }
 }
 
 resource "cloudflare_ruleset" "canonical_redirect" {
@@ -43,7 +51,7 @@ resource "cloudflare_ruleset" "canonical_redirect" {
   phase   = "http_request_dynamic_redirect"
 
   rules {
-    expression = "(http.request.full_uri wildcard r\"${local.match_pattern[each.key]}\")"
+    expression = "(http.request.full_uri wildcard r\"${local.match_pattern[each.key]}\"${local.security_txt_exception[each.key]})"
     action     = "redirect"
     enabled    = true
 
