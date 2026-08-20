@@ -1,9 +1,9 @@
 # Homelab Terraform
 
 Infrastructure as Code for the parts of my homelab that live *outside* the
-Kubernetes cluster: the Proxmox VM it runs next to, the public DNS that points
-at it, the AWS side of its offsite backups, and the ArgoCD release that
-bootstraps it.
+Kubernetes cluster: the Proxmox guests next to it, the public DNS that points at
+it, the DNS and mail of the website zones, the AWS side of its offsite backups,
+and the ArgoCD release that bootstraps it.
 
 The cluster itself is a separate repo, [kubernetes-homelab](https://github.com/Nebu2k/kubernetes-homelab),
 managed via GitOps with ArgoCD. Everything here is applied by hand from a
@@ -26,7 +26,8 @@ for the DKIM tokens of the SES identities, `proxmox` for the SMTP credentials
 of the relay. Both need `aws` applied first.
 
 State lives in a versioned S3 bucket, one key per stack
-(`homelab/<stack>/terraform.tfstate`). The bucket is not managed here.
+(`homelab/<stack>/terraform.tfstate`), locked with native S3 conditional writes
+(`use_lockfile`, no DynamoDB table). The bucket is not managed here.
 
 `.terraform.lock.hcl` is committed, one per stack. The version ranges in
 `required_providers` are wide, so the lock file is what pins the actual provider
@@ -56,9 +57,13 @@ Credentials are not in the repo:
 
 ## proxmox/
 
-Two resources: the Talos `nocloud` image pulled from the Image Factory, and the
-control plane VM cloned from it. The cluster's two other control plane nodes run
-on bare metal and are not part of this stack.
+Two guests. The Talos control plane VM, cloned from a `nocloud` image pulled
+from the Image Factory; the cluster's two other control plane nodes run on bare
+metal and are not part of this stack. And the Blocky LXC, the second resolver of
+the house: Alpine template, config snippets and provisioning script all in the
+stack, so it comes back from nothing. It covers the cluster instance
+complementarily, one resolver in one place would be a single point of failure
+for every client in the house.
 
 Talos deliberately does not go through a VM module. It has no shell, no package
 manager and no user accounts, so there is nothing for cloud-init to do. The node
@@ -75,7 +80,7 @@ changing memory requires stopping the VM.
 The exposure model is one variable:
 
 ```hcl
-public_hosts = ["www", "dreambox", "homeassistant", "plex", "teslamate"]
+public_hosts = ["homeassistant", "plex"]
 ```
 
 Each entry becomes a `CNAME <host> -> <dyndns target>`, DNS-only, never proxied.
@@ -89,8 +94,9 @@ internally, through a split-horizon wildcard that rewrites `*.<domain>` to
 Traefik. Making a service public is a one-line diff, and so is taking it off the
 internet again.
 
-The apex is a CNAME too. Cloudflare flattens it to A/AAAA at the zone root and
-lets it coexist with the MX and TXT records, so the mail setup stays untouched.
+The apex and `www` are deliberately absent: both are custom domains of the
+`elmstreet79-de` Worker, and wrangler refuses to deploy over a record it did not
+create. Their mail records live in the `websites` stack.
 
 ## aws/
 
@@ -119,8 +125,7 @@ versioning worth something: a compromised cluster can hide a backup behind a
 delete marker, but it cannot destroy it.
 
 **Every access key is a Terraform resource**, the eight backup and alert
-consumers in `iam-access-keys.tf` and the two SES senders alongside their
-identities. The price is that both halves of each key sit in the state, and
+consumers in `iam-access-keys.tf` and the SES sender alongside its identity. The price is that both halves of each key sit in the state, and
 because the state bucket is versioned, a rotation only stops the current version
 from naming the old secret, it never removes it. What it buys is one place that
 says which key is current and where it belongs. `terraform output -json
@@ -139,6 +144,18 @@ Terraform cannot grant itself its own permissions.
 The `outputs.tf` here prints the retention state of every bucket and which
 Kubernetes secret each IAM user's key belongs in.
 
+### Two more things this stack owns
+
+The **SNS topic** the cluster's Alertmanager publishes into, mail subscription
+included. It is the only alert path in the homelab, Gatus and Grafana
+deliberately do not notify on their own.
+
+The **permissions boundary** every `homelab-*` user carries. It is what keeps a
+leaked `terraform-homelab` key from becoming an account takeover, and it is a
+third place to touch when a consumer is added, next to the user policy here and
+the SealedSecret in `kubernetes-homelab`. A bucket missing from the boundary
+answers `AccessDenied` while the user policy looks perfectly correct.
+
 ### SES
 
 One domain sends through SES in `eu-west-1`, with Easy DKIM and a custom MAIL
@@ -151,6 +168,15 @@ it over the region, and Terraform is the only thing here that derives it; the
 SES console would instead create an IAM user of its own. The alias
 `aws.ireland` on those resources is what decides the region of that HMAC, IAM
 being global does not change it.
+
+## websites/
+
+The five website zones: the canonical host redirect per zone and the mail
+records of all of them. It deploys nothing, every site ships itself with
+`wrangler` from its own repo, and the custom domains stay in that repo's
+`wrangler.jsonc`. The token needs more than the obvious scopes, and existing
+redirect rules have to be imported instead of applied over. Both are written up
+in [`websites/README.md`](websites/README.md).
 
 ## argocd-talos/
 
