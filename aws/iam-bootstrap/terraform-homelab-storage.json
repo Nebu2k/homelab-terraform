@@ -13,6 +13,7 @@
       ],
       "Resource": [
         "arn:aws:s3:::homelab-elmstreet79-terraform-state",
+        "arn:aws:s3:::homelab-paperless-backup-elmstreet79",
         "arn:aws:s3:::homelab-paperless-backup",
         "arn:aws:s3:::homelab-homeassistent-elmstreet79",
         "arn:aws:s3:::homelab-teslamate-backup",

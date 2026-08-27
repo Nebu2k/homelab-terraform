@@ -3,7 +3,7 @@ output "backup_buckets" {
   value = {
     (var.paperless_bucket) = {
       versioning = aws_s3_bucket_versioning.paperless.versioning_configuration[0].status
-      retention  = "none, only multipart abort after ${var.multipart_abort_days} days"
+      retention  = "multipart abort after ${var.multipart_abort_days} days, Object Lock GOVERNANCE ${var.paperless_object_lock_days} days per object"
     }
     (var.home_assistant_bucket) = {
       versioning = "Disabled"

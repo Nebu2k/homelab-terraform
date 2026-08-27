@@ -7,7 +7,21 @@ variable "aws_region" {
 variable "paperless_bucket" {
   description = "Bucket holding the paperless-ngx document_exporter state"
   type        = string
-  default     = "homelab-paperless-backup"
+  default     = "homelab-paperless-backup-elmstreet79"
+}
+
+# Object Lock is only settable at bucket creation, so this retention cannot be
+# introduced later without a new bucket. GOVERNANCE, not COMPLIANCE: a bypass
+# stays possible for an admin holding s3:BypassGovernanceRetention.
+#
+# The clock runs from PutObject, not from the last sync. The sidecar uploads
+# only what changed and document_exporter keeps the old mtimes, so a document
+# written once is never touched again; a short retention would leave exactly
+# the old originals unprotected. Hence a span that outlives them.
+variable "paperless_object_lock_days" {
+  description = "Default retention every new object in the paperless bucket receives"
+  type        = number
+  default     = 3650
 }
 
 variable "home_assistant_bucket" {

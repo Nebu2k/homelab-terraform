@@ -6,6 +6,10 @@
 resource "aws_s3_bucket" "paperless" {
   bucket = var.paperless_bucket
 
+  # Only settable at creation. Turning it on for an existing bucket needs an
+  # AWS support case, so a change here means a new bucket, not an update.
+  object_lock_enabled = true
+
   lifecycle {
     prevent_destroy = true
   }
@@ -66,6 +70,30 @@ resource "aws_s3_bucket_versioning" "paperless" {
 
   versioning_configuration {
     status = "Enabled"
+  }
+
+  lifecycle {
+    prevent_destroy = true
+  }
+}
+
+# Object Lock closes the last path from a leaked "terraform-homelab" key to
+# these backups. That key cannot touch objects, but it may write bucket
+# configuration, and a lifecycle rule expiring everything tomorrow destroys
+# what DeleteObject no longer can. IAM cannot close this: Terraform has to be
+# able to configure the buckets it owns.
+#
+# GOVERNANCE, so an admin with s3:BypassGovernanceRetention can still correct a
+# mistake. Nobody holds that permission; it is attached by hand when needed.
+# COMPLIANCE would be irreversible even for root.
+resource "aws_s3_bucket_object_lock_configuration" "paperless" {
+  bucket = aws_s3_bucket.paperless.id
+
+  rule {
+    default_retention {
+      mode = "GOVERNANCE"
+      days = var.paperless_object_lock_days
+    }
   }
 
   lifecycle {
