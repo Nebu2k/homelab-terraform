@@ -113,6 +113,18 @@
       "Resource": "arn:aws:sns:eu-central-1:ACCOUNT_ID:homelab"
     },
     {
+      "Sid": "ManageOwnBudgets",
+      "Effect": "Allow",
+      "Action": [
+        "budgets:ViewBudget",
+        "budgets:ModifyBudget",
+        "budgets:ListTagsForResource",
+        "budgets:TagResource",
+        "budgets:UntagResource"
+      ],
+      "Resource": "arn:aws:budgets::ACCOUNT_ID:budget/*"
+    },
+    {
       "Sid": "ManageAlertSubscription",
       "Effect": "Allow",
       "Action": [

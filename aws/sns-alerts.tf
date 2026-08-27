@@ -82,3 +82,51 @@ resource "aws_iam_user_policy_attachment" "alertmanager_sns" {
   user       = aws_iam_user.alertmanager.name
   policy_arn = aws_iam_policy.alertmanager_sns.arn
 }
+
+# The topic carried the default policy until now, which grants this account
+# everything and nobody else anything. Budgets is not this account, it is an
+# AWS service principal, so it needs a statement of its own: without it the
+# budget is created and its notifications silently never arrive.
+#
+# The default statement is restated here on purpose. This resource REPLACES the
+# topic policy, it does not extend it, so anything left out is gone.
+#
+# The topic must stay unencrypted. With SSE, Budgets additionally needs
+# permission on the KMS key, and it fails without a useful error.
+resource "aws_sns_topic_policy" "alerts" {
+  arn = aws_sns_topic.alerts.arn
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid       = "OwnerFullAccess"
+        Effect    = "Allow"
+        Principal = { AWS = "*" }
+        Action = [
+          "SNS:Publish",
+          "SNS:RemovePermission",
+          "SNS:SetTopicAttributes",
+          "SNS:DeleteTopic",
+          "SNS:ListSubscriptionsByTopic",
+          "SNS:GetTopicAttributes",
+          "SNS:AddPermission",
+          "SNS:Subscribe",
+        ]
+        Resource  = aws_sns_topic.alerts.arn
+        Condition = { StringEquals = { "AWS:SourceAccount" = data.aws_caller_identity.current.account_id } }
+      },
+      {
+        Sid       = "BudgetsPublish"
+        Effect    = "Allow"
+        Principal = { Service = "budgets.amazonaws.com" }
+        Action    = "SNS:Publish"
+        Resource  = aws_sns_topic.alerts.arn
+        Condition = {
+          StringEquals = { "aws:SourceAccount" = data.aws_caller_identity.current.account_id }
+          ArnLike      = { "aws:SourceArn" = "arn:aws:budgets::${data.aws_caller_identity.current.account_id}:*" }
+        }
+      },
+    ]
+  })
+}

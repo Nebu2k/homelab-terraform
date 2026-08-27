@@ -166,3 +166,30 @@ variable "ses_region" {
   default     = "eu-west-1"
 }
 
+
+variable "budget_name" {
+  description = "Name of the account-wide monthly cost budget"
+  type        = string
+  default     = "homelab-monthly"
+}
+
+# The account holds five small buckets plus SES and SNS, so the real bill is
+# far below this. The point is not to sit close to it but to notice a tenfold
+# change; a limit near the actual spend would fire on rounding.
+variable "budget_limit_usd" {
+  description = "Monthly cost limit the notifications are measured against"
+  type        = string
+  default     = "5"
+}
+
+variable "budget_actual_threshold_percent" {
+  description = "Share of the limit at which already incurred spend alerts"
+  type        = number
+  default     = 80
+}
+
+variable "budget_forecast_threshold_percent" {
+  description = "Share of the limit at which the month's projection alerts"
+  type        = number
+  default     = 100
+}
