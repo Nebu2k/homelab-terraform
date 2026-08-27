@@ -9,7 +9,6 @@
       ],
       "Resource": [
         "arn:aws:s3:::homelab-paperless-backup-elmstreet79",
-        "arn:aws:s3:::homelab-paperless-backup",
         "arn:aws:s3:::homelab-homeassistent-elmstreet79",
         "arn:aws:s3:::homelab-teslamate-backup",
         "arn:aws:s3:::homelab-etcd-snapshots-elmstreet79",
@@ -27,7 +26,6 @@
       ],
       "Resource": [
         "arn:aws:s3:::homelab-paperless-backup-elmstreet79/*",
-        "arn:aws:s3:::homelab-paperless-backup/*",
         "arn:aws:s3:::homelab-homeassistent-elmstreet79/*",
         "arn:aws:s3:::homelab-teslamate-backup/*",
         "arn:aws:s3:::homelab-etcd-snapshots-elmstreet79/*",
