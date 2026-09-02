@@ -63,10 +63,12 @@ variable "teslamate_monthly_days" {
   default     = 365
 }
 
+# One key per day and per month, so nothing is overwritten and the only
+# noncurrent versions are the ones the expiration rules tombstone.
 variable "teslamate_noncurrent_days" {
-  description = "Retention of overwritten Teslamate object versions"
+  description = "Grace period before a tombstoned Teslamate version is purged"
   type        = number
-  default     = 30
+  default     = 1
 }
 
 variable "etcd_snapshots_bucket" {
@@ -143,10 +145,12 @@ variable "mealie_monthly_days" {
   default     = 365
 }
 
+# Same as teslamate_noncurrent_days: unique keys, so this is only the grace
+# period on the tombstones the expiration rules leave behind.
 variable "mealie_noncurrent_days" {
-  description = "Retention of overwritten Mealie backups as noncurrent versions"
+  description = "Grace period before a tombstoned Mealie version is purged"
   type        = number
-  default     = 30
+  default     = 1
 }
 
 variable "alerts_topic_name" {
