@@ -78,13 +78,16 @@ variable "etcd_snapshots_bucket" {
 variable "etcd_snapshot_days" {
   description = "Retention of the etcd snapshots in S3"
   type        = number
-  default     = 30
+  default     = 7
 }
 
+# The snapshot names carry a timestamp and are never overwritten, so the only
+# noncurrent versions are the ones the expiration rule tombstones. Billed
+# lifetime is etcd_snapshot_days plus this value, hence the short grace period.
 variable "etcd_snapshot_noncurrent_days" {
-  description = "Retention of overwritten etcd snapshot versions"
+  description = "Grace period before a tombstoned etcd snapshot version is purged"
   type        = number
-  default     = 30
+  default     = 1
 }
 
 variable "multipart_abort_days" {
