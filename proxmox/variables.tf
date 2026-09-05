@@ -122,7 +122,7 @@ variable "blocky_version" {
   description = "Blocky release tag for the LXC instance (must match the image tag in kubernetes-homelab/manifests/blocky/deployment.yaml)"
   type        = string
   # renovate: datasource=github-releases depName=0xERR0R/blocky
-  default = "v0.34.0"
+  default = "v0.35.0"
 }
 
 variable "blocky_config_url" {
