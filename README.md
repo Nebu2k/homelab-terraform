@@ -7,7 +7,9 @@ and the ArgoCD release that bootstraps it.
 
 The cluster itself is a separate repo, [kubernetes-homelab](https://github.com/Nebu2k/kubernetes-homelab),
 managed via GitOps with ArgoCD. Everything here is applied by hand from a
-workstation.
+workstation. Renovate keeps the providers current and merges minors and patches
+once `.github/workflows/validate.yml` (fmt, init against the lock files,
+validate) is green; a merge only changes what the next apply uses.
 
 ## Stacks
 
@@ -19,7 +21,7 @@ Five independent root modules, each with its own state file.
 | [`cloudflare/`](cloudflare/) | Public DNS records for the exposed services | `cloudflare/cloudflare` |
 | [`websites/`](websites/) | Redirects and mail records of the five website zones | `cloudflare/cloudflare` |
 | [`aws/`](aws/) | S3 buckets, IAM users and the SES identities | `hashicorp/aws` |
-| [`argocd-talos/`](argocd-talos/) | The ArgoCD release that bootstraps the cluster | `hashicorp/helm` |
+| [`argocd-talos/`](argocd-talos/) | The one-time ArgoCD install that bootstraps the cluster | `hashicorp/helm` |
 
 Two of them read the `aws` state through `terraform_remote_state`: `websites`
 for the DKIM tokens of the SES identities, `proxmox` for the SMTP credentials
@@ -52,8 +54,8 @@ Credentials are not in the repo:
 * **Proxmox / Cloudflare**: non-secret values go into `terraform.tfvars`
   (gitignored, see the `.example` files), secrets come from `TF_VAR_*`
   environment variables.
-* **Talos cluster**: no credential. `argocd-talos/` reads the kubeconfig that
-  talhelper generated under `kubernetes-homelab/talos/clusterconfig/`.
+* **Talos cluster**: no credential. `argocd-talos/` reads the kubeconfig under
+  `kubernetes-homelab/talos/clusterconfig/`.
 
 ## proxmox/
 
@@ -180,9 +182,14 @@ in [`websites/README.md`](websites/README.md).
 
 ## argocd-talos/
 
-A single `helm_release` for ArgoCD. The target cluster is decided by
-`var.kubeconfig_path`, which points at the talhelper-generated kubeconfig; that
-file can only reach the Talos cluster.
+A single `helm_release` for ArgoCD, for the bootstrap only. It takes the chart
+version from `kubernetes-homelab/apps/argocd.yaml` and the values from
+`kubernetes-homelab/manifests/argocd/values.yaml`, so it installs exactly what
+the `argocd` Application then takes over. From there ArgoCD manages itself and
+the release has `ignore_changes = all`: an apply never rolls it back.
+
+The target cluster is decided by `var.kubeconfig_path`; that file can only reach
+the Talos cluster.
 
 The root Application is not applied here: a `kubernetes_manifest` needs its CRD
 at plan time, and the `Application` CRD only exists once this release is
