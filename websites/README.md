@@ -53,7 +53,7 @@ A zone that already carries a redirect rule has to be imported, not applied
 over, otherwise the rule is dropped and recreated and the site 404s in between:
 
 ```sh
-terraform import 'cloudflare_ruleset.canonical_redirect["seb-it.com"]' zone/<zone_id>/<ruleset_id>
+terraform import 'cloudflare_ruleset.canonical_redirect["seb-it.com"]' zones/<zone_id>/<ruleset_id>
 ```
 
 The ruleset id comes from the API, the dashboard does not show it:
@@ -91,10 +91,10 @@ Four properties of the API shape the file:
   every write to them with `This record is managed by Email Routing (1046)`.
   They are filtered out rather than listed, so enabling Email Routing on
   another zone does not reintroduce the problem.
-- **`name` is relative for subdomains, absolute for the apex.** The provider
-  stores `mail`, not `mail.seb-it.com`, and a full name forces replacement.
-  Terraform then destroys and recreates the MX records of a zone, which is a
-  gap in mail delivery, not a no-op.
+- **`name` is relative for subdomains, absolute for the apex.** Provider v5
+  stores the full name (`mail.seb-it.com`) and treats `mail` as the same record,
+  so either spelling plans clean. Check any change to a record's identity with
+  `terraform plan` first: a replaced MX record is a gap in mail delivery.
 - **`ttl` and `comment` come from the existing records, not from a
   convention.** The zones mix TTL 1 and 3600 and some records already carry a
   comment. Normalising them would touch 23 records for no reason and bury the
