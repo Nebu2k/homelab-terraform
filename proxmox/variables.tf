@@ -118,11 +118,16 @@ variable "talos_vm_network_bridge" {
 # Blocky LXC (second resolver instance)
 # ============================================
 
-variable "blocky_version" {
-  description = "Blocky release tag for the LXC instance (must match the image tag in kubernetes-homelab/manifests/blocky/deployment.yaml)"
+variable "blocky_manifest_url" {
+  description = "Raw URL of the cluster instance's Deployment; the LXC reads the Blocky image tag from it every hour and follows it after blocky_soak_hours"
   type        = string
-  # renovate: datasource=github-releases depName=0xERR0R/blocky
-  default = "v0.35.0"
+  default     = "https://raw.githubusercontent.com/Nebu2k/kubernetes-homelab/main/manifests/blocky/deployment.yaml"
+}
+
+variable "blocky_soak_hours" {
+  description = "How long a new Blocky version runs on the cluster instance before the LXC installs it"
+  type        = number
+  default     = 24
 }
 
 variable "blocky_config_url" {

@@ -1,0 +1,168 @@
+#!/bin/sh
+#
+# Keeps the Blocky binary of this container on the version the cluster
+# instance runs, read from the image tag in the cluster repo. Runs hourly as a
+# cron job INSIDE the container, not on the Proxmox host.
+#
+# Deliberately behind, not in step: a new version is installed only once this
+# script has seen it for ${soak_hours} hours. Until then the cluster instance is
+# the canary and this one the fallback; in step, a broken release would take
+# both resolvers down at once.
+#
+# The checksum comes from the release, the old binary stays as .last-good, and
+# a failed healthcheck after the restart rolls back. A version that failed is
+# not tried again: every attempt costs this resolver a minute.
+#
+# --bootstrap is install.sh's call: install only when there is no binary yet,
+# without waiting and without a restart (install.sh starts the service). An
+# existing binary is left to the hourly run, so a "terraform apply" never
+# skips the soak.
+#
+# Terraform renders this file from blocky/version-sync.sh.tftpl.
+
+set -eu
+
+PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+export PATH
+
+blocky=/usr/local/bin/blocky
+lastgood=/usr/local/bin/blocky.last-good
+marker=/etc/blocky/.version
+seen=/etc/blocky/.version-seen
+failed=/etc/blocky/.version-failed
+manifest_url="${manifest_url}"
+soak=$((${soak_hours} * 3600))
+statefile=${textfile_dir}/blocky-version-sync.prom
+bootstrap=0
+[ "$${1:-}" = "--bootstrap" ] && bootstrap=1
+
+log() { logger -t blocky-version-sync "$*"; echo "[blocky-version-sync] $*"; }
+
+# 1 or 0 for the last run, plus the version waiting out the soak (empty when
+# none is). Without it a release that never installs would be silent.
+write_state() {
+  mkdir -p "$(dirname "$statefile")"
+  cat > "$statefile.tmp" <<STATE
+# HELP blocky_version_sync_success Last version sync run successful (1) or not (0)
+# TYPE blocky_version_sync_success gauge
+blocky_version_sync_success $1
+# HELP blocky_version_sync_pending_since_seconds First sighting of a version not installed yet
+# TYPE blocky_version_sync_pending_since_seconds gauge
+blocky_version_sync_pending_since_seconds{version="$2"} $3
+STATE
+  mv "$statefile.tmp" "$statefile"
+}
+
+# Replaces the binary by rename within its own directory. Copying over the
+# running file would fail with "Text file busy".
+put_binary() {
+  cp "$1" "$blocky.new"
+  chmod 0755 "$blocky.new"
+  mv -f "$blocky.new" "$blocky"
+}
+
+if [ "$bootstrap" -eq 1 ] && [ -x "$blocky" ]; then
+  exit 0
+fi
+
+want=$(curl -fsSL --max-time 30 "$manifest_url" |
+  sed -n 's|.*image: ghcr\.io/0xerr0r/blocky:\(v[0-9][0-9.]*\).*|\1|p' | head -n1) || want=""
+if [ -z "$want" ]; then
+  log "Cannot read the cluster version from $manifest_url"
+  write_state 0 "" 0
+  exit 1
+fi
+
+have=$(cat "$marker" 2>/dev/null || true)
+if [ "$want" = "$have" ] && [ -x "$blocky" ]; then
+  rm -f "$seen"
+  write_state 1 "" 0
+  exit 0
+fi
+
+if [ "$(cat "$failed" 2>/dev/null || true)" = "$want" ]; then
+  log "$want failed before, not trying it again until a newer version appears"
+  write_state 0 "$want" 0
+  exit 0
+fi
+rm -f "$failed"
+
+# ---------------------------------------------------------------------- Soak
+now=$(date +%s)
+seen_version=""
+seen_ts=""
+[ -f "$seen" ] && read -r seen_version seen_ts < "$seen" || true
+if [ "$seen_version" != "$want" ] || [ -z "$seen_ts" ]; then
+  seen_ts=$now
+  printf '%s %s\n' "$want" "$seen_ts" > "$seen"
+fi
+if [ "$bootstrap" -eq 0 ] && [ -x "$blocky" ] && [ $((now - seen_ts)) -lt "$soak" ]; then
+  log "$want waits out the soak, $(( (soak - now + seen_ts) / 60 )) minutes left"
+  write_state 1 "$want" "$seen_ts"
+  exit 0
+fi
+
+# ------------------------------------------------------------------ Download
+tarball="blocky_$${want}_Linux_x86_64.tar.gz"
+base="https://github.com/0xERR0R/blocky/releases/download/$want"
+tmp=$(mktemp -d)
+trap 'rm -rf "$tmp"' EXIT
+
+if ! curl -fsSL --max-time 120 "$base/$tarball" -o "$tmp/$tarball" ||
+   ! curl -fsSL --max-time 30 "$base/blocky_checksums.txt" -o "$tmp/checksums.txt"; then
+  log "Download of $want failed, keeping $${have:-nothing}"
+  write_state 0 "$want" "$seen_ts"
+  exit 1
+fi
+
+if ! (cd "$tmp" && grep "  $tarball\$" checksums.txt | sha256sum -c -s); then
+  log "Checksum of $tarball does not match, NOT installing it"
+  write_state 0 "$want" "$seen_ts"
+  exit 1
+fi
+
+tar -xzf "$tmp/$tarball" -C "$tmp" blocky
+mkdir -p /etc/blocky
+
+if [ "$bootstrap" -eq 1 ]; then
+  put_binary "$tmp/blocky"
+  printf '%s' "$want" > "$marker"
+  rm -f "$seen"
+  log "Blocky $want installed"
+  write_state 1 "" 0
+  exit 0
+fi
+
+# ------------------------------------------------------------------- Install
+log "Installing Blocky $want (was $${have:-none})"
+if [ -x "$blocky" ]; then cp "$blocky" "$lastgood"; else rm -f "$lastgood"; fi
+put_binary "$tmp/blocky"
+printf '%s' "$want" > "$marker"
+
+# Blocky loads the blocklists before it listens on port 53, hence the wait.
+if rc-service blocky restart >/dev/null 2>&1; then
+  i=0
+  while [ "$i" -lt 30 ]; do
+    if "$blocky" healthcheck >/dev/null 2>&1; then
+      rm -f "$seen"
+      log "Blocky $want is running"
+      # A config change shipped with the release may only validate against
+      # the new binary, so pick it up now rather than in up to 15 minutes.
+      /etc/periodic/15min/blocky-config-sync || true
+      write_state 1 "" 0
+      exit 0
+    fi
+    i=$((i + 1))
+    sleep 2
+  done
+fi
+
+log "Blocky $want does not come up, rolling back to $${have:-nothing}"
+printf '%s' "$want" > "$failed"
+if [ -x "$lastgood" ]; then
+  put_binary "$lastgood"
+  printf '%s' "$have" > "$marker"
+  rc-service blocky restart >/dev/null 2>&1 || true
+fi
+write_state 0 "$want" "$seen_ts"
+exit 1

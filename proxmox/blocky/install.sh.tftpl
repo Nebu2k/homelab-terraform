@@ -14,7 +14,6 @@
 set -eu
 
 vmid="${vmid}"
-blocky_version="${blocky_version}"
 snippets="${snippets_dir}"
 
 log() { echo "[blocky-install] $*"; }
@@ -40,28 +39,6 @@ done
 # state.
 pct exec "$vmid" -- apk add --no-cache unbound ca-certificates curl \
   prometheus-node-exporter prometheus-node-exporter-openrc
-
-# -------------------------------------------------------------------- Blocky
-# No Alpine package, so the release binary. Statically linked Go, which means
-# it also runs against musl.
-#
-# The installed version is kept in a marker file rather than parsed out of
-# "blocky version": the format of that output is not a promise.
-installed=$(pct exec "$vmid" -- cat /etc/blocky/.version 2>/dev/null || true)
-if [ "$installed" = "$blocky_version" ] && pct exec "$vmid" -- test -x /usr/local/bin/blocky; then
-  log "Blocky $blocky_version is installed"
-else
-  log "Installing Blocky $blocky_version"
-  url="https://github.com/0xERR0R/blocky/releases/download/$blocky_version/blocky_$${blocky_version}_Linux_x86_64.tar.gz"
-  pct exec "$vmid" -- sh -c "curl -fsSL '$url' -o /tmp/blocky.tar.gz \
-    && mkdir -p /etc/blocky \
-    && tar -xzf /tmp/blocky.tar.gz -C /usr/local/bin blocky \
-    && chmod 0755 /usr/local/bin/blocky \
-    && rm -f /tmp/blocky.tar.gz \
-    && printf '%s' '$blocky_version' > /etc/blocky/.version"
-  changed_binary=1
-fi
-changed_binary=$${changed_binary:-0}
 
 # ------------------------------------------------------------- Configuration
 pct exec "$vmid" -- mkdir -p /etc/blocky
@@ -101,7 +78,16 @@ pct exec "$vmid" -- mkdir -p /var/lib/node_exporter/textfile
 pct exec "$vmid" -- chmod 0755 /var/lib/node_exporter/textfile
 sync_file "$snippets/blocky-config-sync.sh" /etc/periodic/15min/blocky-config-sync || true
 pct exec "$vmid" -- chmod 0755 /etc/periodic/15min/blocky-config-sync
+
+# -------------------------------------------------------------------- Blocky
+# No Alpine package, so the release binary. Statically linked Go, which means
+# it also runs against musl. Which version is not decided here: the hourly
+# version sync follows the cluster instance's image tag. --bootstrap installs
+# only into a container without a binary, so an apply never skips its soak.
+sync_file "$snippets/blocky-version-sync.sh" /etc/periodic/hourly/blocky-version-sync || true
+pct exec "$vmid" -- chmod 0755 /etc/periodic/hourly/blocky-version-sync
 pct exec "$vmid" -- rc-update add crond default
+pct exec "$vmid" -- /etc/periodic/hourly/blocky-version-sync --bootstrap
 
 # Trust anchor for DNSSEC validation. unbound-anchor creates the file on the
 # first run and updates it afterwards via RFC 5011.
@@ -136,7 +122,7 @@ if ! pct exec "$vmid" -- test -s /etc/blocky/config.yml; then
   exit 1
 fi
 
-if [ "$changed_blocky" -eq 1 ] || [ "$changed_binary" -eq 1 ] || \
+if [ "$changed_blocky" -eq 1 ] || \
    ! pct exec "$vmid" -- rc-service blocky status >/dev/null 2>&1; then
   log "Restarting Blocky"
   pct exec "$vmid" -- rc-service blocky restart
@@ -150,4 +136,4 @@ until pct exec "$vmid" -- /usr/local/bin/blocky healthcheck >/dev/null 2>&1; do
   sleep 2
 done
 
-log "Blocky $blocky_version is running in CT $vmid"
+log "Blocky $(pct exec "$vmid" -- cat /etc/blocky/.version) is running in CT $vmid"

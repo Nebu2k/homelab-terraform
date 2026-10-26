@@ -109,6 +109,29 @@ resource "proxmox_virtual_environment_file" "blocky_config_sync" {
   }
 }
 
+# The Blocky version follows the cluster instance the same way, hourly and
+# with a delay so that one bad release cannot reach both resolvers at once.
+# Terraform owns no version: a variable here would be a second owner, and an
+# apply would roll the container back to it.
+locals {
+  blocky_version_sync = templatefile("${path.module}/blocky/version-sync.sh.tftpl", {
+    manifest_url = var.blocky_manifest_url
+    soak_hours   = var.blocky_soak_hours
+    textfile_dir = "/var/lib/node_exporter/textfile"
+  })
+}
+
+resource "proxmox_virtual_environment_file" "blocky_version_sync" {
+  content_type = "snippets"
+  datastore_id = var.blocky_lxc_template_storage
+  node_name    = var.proxmox_node
+
+  source_raw {
+    data      = local.blocky_version_sync
+    file_name = "blocky-version-sync.sh"
+  }
+}
+
 resource "proxmox_virtual_environment_file" "blocky_node_exporter_confd" {
   content_type = "snippets"
   datastore_id = var.blocky_lxc_template_storage
@@ -127,9 +150,8 @@ resource "proxmox_virtual_environment_file" "blocky_install_script" {
 
   source_raw {
     data = templatefile("${path.module}/blocky/install.sh.tftpl", {
-      vmid           = local.blocky_lxc.vm_id
-      blocky_version = var.blocky_version
-      snippets_dir   = local.blocky_snippets_dir
+      vmid         = local.blocky_lxc.vm_id
+      snippets_dir = local.blocky_snippets_dir
     })
     file_name = "blocky-install.sh"
   }
@@ -214,8 +236,8 @@ resource "proxmox_virtual_environment_container" "blocky" {
 #
 # A provisioner and not a hook script: the hook would run on every start of
 # the container and therefore also when nobody changed anything. Here the run
-# hangs off the checksums of the files and the Blocky version, so it runs
-# exactly when there is something to do.
+# hangs off the checksums of the files, so it runs exactly when there is
+# something to do.
 #
 # The path leads through the Proxmox host and "pct", not via SSH into the
 # container: it has no sshd, and setting one up just for provisioning would be
@@ -223,11 +245,11 @@ resource "proxmox_virtual_environment_container" "blocky" {
 resource "terraform_data" "blocky_provision" {
   triggers_replace = {
     container      = proxmox_virtual_environment_container.blocky.id
-    blocky_version = var.blocky_version
     unbound_config = sha256(file("${path.module}/blocky/unbound.conf"))
     unbound_confd  = sha256(file("${path.module}/blocky/unbound.confd"))
     openrc         = sha256(file("${path.module}/blocky/blocky.openrc"))
     config_sync    = sha256(file("${path.module}/blocky/config-sync.sh.tftpl"))
+    version_sync   = sha256(local.blocky_version_sync)
     node_exporter  = sha256(file("${path.module}/blocky/node-exporter.confd"))
     install_script = sha256(file("${path.module}/blocky/install.sh.tftpl"))
   }
@@ -237,6 +259,7 @@ resource "terraform_data" "blocky_provision" {
     proxmox_virtual_environment_file.blocky_unbound_confd,
     proxmox_virtual_environment_file.blocky_openrc,
     proxmox_virtual_environment_file.blocky_config_sync,
+    proxmox_virtual_environment_file.blocky_version_sync,
     proxmox_virtual_environment_file.blocky_node_exporter_confd,
     proxmox_virtual_environment_file.blocky_install_script,
   ]
