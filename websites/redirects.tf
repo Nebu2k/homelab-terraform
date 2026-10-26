@@ -50,19 +50,21 @@ resource "cloudflare_ruleset" "canonical_redirect" {
   kind    = "zone"
   phase   = "http_request_dynamic_redirect"
 
-  rules {
-    expression = "(http.request.full_uri wildcard r\"${local.match_pattern[each.key]}\"${local.security_txt_exception[each.key]})"
-    action     = "redirect"
-    enabled    = true
+  rules = [{
+    # The rule's name in the dashboard.
+    description = "${local.redirected_host[each.key]} to ${local.canonical_host[each.key]}"
+    expression  = "(http.request.full_uri wildcard r\"${local.match_pattern[each.key]}\"${local.security_txt_exception[each.key]})"
+    action      = "redirect"
+    enabled     = true
 
-    action_parameters {
-      from_value {
+    action_parameters = {
+      from_value = {
         status_code = 301
-        target_url {
+        target_url = {
           expression = "wildcard_replace(http.request.full_uri, r\"${local.match_pattern[each.key]}\", r\"${local.replace_pattern[each.key]}\")"
         }
         preserve_query_string = false
       }
     }
-  }
+  }]
 }

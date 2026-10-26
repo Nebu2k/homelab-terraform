@@ -243,12 +243,12 @@ locals {
   ]...)
 }
 
-resource "cloudflare_record" "mail" {
+resource "cloudflare_dns_record" "mail" {
   for_each = merge(local.mail_records, local.ses_dkim_records)
 
   zone_id = var.sites[each.value.zone_key].zone_id
-  # The provider keeps a subdomain's name relative ("mail"). A full name forces
-  # replacement, which takes the zone's MX records down while it runs.
+  # Relative for subdomains ("mail"). The provider stores the full name and
+  # treats both spellings as the same record.
   name     = each.value.name
   type     = each.value.type
   content  = each.value.value

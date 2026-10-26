@@ -9,7 +9,7 @@
 #
 # DNS-only (proxied = false): TLS is terminated at Traefik, not at Cloudflare.
 
-resource "cloudflare_record" "public" {
+resource "cloudflare_dns_record" "public" {
   for_each = var.public_hosts
 
   zone_id = var.cloudflare_zone_id
