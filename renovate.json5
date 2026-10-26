@@ -4,24 +4,32 @@
   extends: [
     'config:recommended',
     ':dependencyDashboard',
+    // TERRAFORM_VERSION in .github/workflows/validate.yml.
+    'customManagers:githubActionsVersions',
   ],
 
   timezone: 'Europe/Berlin',
 
-  // Kein "schedule" hier. Wann Renovate laeuft, steuert der Cron in
-  // kubernetes-homelab/.github/workflows/renovate.yml; dieses Repo hat keinen
-  // eigenen Workflow und steht dort in RENOVATE_REPOSITORIES mit drin. Die
-  // Konfiguration liest Renovate je Repo aus dem Repo selbst, die beiden
-  // renovate.json5 sind unabhaengig voneinander.
+  // No "schedule" here. The cron in kubernetes-homelab/.github/workflows/
+  // renovate.yml runs this repo as well (RENOVATE_REPOSITORIES); each repo
+  // carries its own configuration.
 
   semanticCommits: 'enabled',
 
-  // Der PR entsteht sofort und wartet nicht auf einen Branch-Status.
+  // validate.yml runs on pull_request, never on a branch push, so the PR has
+  // to exist before any status can.
   prCreation: 'immediate',
 
-  // Kein Automerge: nichts in diesem Repo rollt sich selbst aus. Jeder Merge ist
-  // eine Notiz, die erst durch ein "terraform apply" von Hand wirksam wird.
-  automerge: false,
+  // A merge here rolls nothing out, it changes what the next manual
+  // "terraform apply" uses. So everything merges once validate.yml is green,
+  // which catches a provider whose schema no longer fits the configuration.
+  // Majors stay manual (rule below).
+  automerge: true,
+  automergeType: 'pr',
+  // Renovate merges itself: main has no required checks, so GitHub's
+  // auto-merge would not wait for validate.yml.
+  platformAutomerge: false,
+  rebaseWhen: 'conflicted',
 
   packageRules: [
     {
@@ -34,44 +42,15 @@
       semanticCommitType: 'chore',
       semanticCommitScope: 'ci',
     },
-    // Der ArgoCD-Chart des Clusters. Vor dem Apply eines Chart-Majors pruefen,
-    // dass argocd-cm die Keys accounts.readonly und timeout.reconciliation noch
-    // hat: das Chart liefert die ConfigMap mit, die App argocd-config patcht nur
-    // hinein.
-    {
-      matchPackageNames: ['argo-cd'],
-      semanticCommitType: 'chore',
-      semanticCommitScope: 'argocd',
-    },
-    // Der bpg-Provider ist die Schnittstelle zu den Cluster-VMs. Ein Major kann
-    // Ressourcen umbenennen, also nie ohne "terraform plan" gegen alle Stacks.
     {
       matchPackageNames: ['bpg/proxmox'],
-      semanticCommitType: 'chore',
       semanticCommitScope: 'proxmox',
     },
-  ],
-
-  // Die Provider stehen als Bereiche in required_providers. Renovate meldet sich
-  // damit erst, wenn eine neue Version den Bereich verlaesst, also bei einem
-  // Major. Patches zieht "terraform init -upgrade" beim naechsten Apply mit.
-  //
-  // .terraform.lock.hcl ist committet, eine je Stack. Renovate zieht sie beim
-  // Anheben eines Bereichs nur mit, wenn das Image ein terraform-Binary hat;
-  // sonst bleibt die Lock-Datei stehen und das naechste "terraform init"
-  // verlangt ein "-upgrade". Die Dateien tragen nur darwin_arm64-Hashes, ein auf
-  // einem Linux-Runner neu geschriebener Lock wuerde die Plattform tauschen
-  // statt ergaenzen ("terraform providers lock" mit beiden -platform).
-  customManagers: [
-    // Die argo-cd-Chart-Version steckt im default einer Variablen und ist damit
-    // fuer den terraform-Manager unsichtbar; er kennt nur required_providers und
-    // Module.
+    // A major renames resources (cloudflare v5) and needs a migration with a
+    // "terraform plan" against the stack, not just a green validate.
     {
-      customType: 'regex',
-      managerFilePatterns: ['argocd-talos/variables.tf'],
-      matchStrings: [
-        '# renovate: datasource=(?<datasource>\\S+) depName=(?<depName>\\S+) registryUrl=(?<registryUrl>\\S+)\\s+default\\s*=\\s*"(?<currentValue>[^"]+)"',
-      ],
+      matchUpdateTypes: ['major'],
+      automerge: false,
     },
   ],
 }

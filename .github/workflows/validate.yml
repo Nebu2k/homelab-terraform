@@ -1,0 +1,52 @@
+name: Validate
+
+# The gate for Renovate's automerge here: format, provider install against the
+# committed lock files, and the configuration against the provider schemas.
+# Needs no credentials, so it never touches a backend or a real resource.
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    name: Terraform
+    runs-on: ubuntu-latest
+    env:
+      # renovate: datasource=github-releases depName=hashicorp/terraform extractVersion=^v(?<version>.+)$
+      TERRAFORM_VERSION: 1.17.0
+      TF_PLUGIN_CACHE_DIR: ${{ github.workspace }}/.terraform-plugins
+      TF_IN_AUTOMATION: "1"
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: hashicorp/setup-terraform@v4.0.1
+        with:
+          terraform_version: ${{ env.TERRAFORM_VERSION }}
+          terraform_wrapper: false
+
+      - name: Format
+        run: terraform fmt -check -recursive -diff
+
+      - name: Init and validate every stack
+        run: |
+          mkdir -p "$TF_PLUGIN_CACHE_DIR"
+          failed=0
+          for stack in */; do
+            stack=${stack%/}
+            ls "$stack"/*.tf >/dev/null 2>&1 || continue
+            echo "::group::$stack"
+            if terraform -chdir="$stack" init -backend=false -input=false -lockfile=readonly \
+               && terraform -chdir="$stack" validate; then
+              echo "::endgroup::"
+            else
+              echo "::endgroup::"
+              echo "::error::$stack failed"
+              failed=1
+            fi
+          done
+          exit $failed
