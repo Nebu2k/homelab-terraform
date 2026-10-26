@@ -34,13 +34,17 @@ jobs:
 
       - name: Init and validate every stack
         run: |
+          # No -lockfile=readonly: the committed locks may carry darwin_arm64
+          # h1 hashes only. init still checks the download against their zh
+          # hashes and installs the locked versions, it just records the
+          # linux_amd64 hash in the runner's copy.
           mkdir -p "$TF_PLUGIN_CACHE_DIR"
           failed=0
           for stack in */; do
             stack=${stack%/}
             ls "$stack"/*.tf >/dev/null 2>&1 || continue
             echo "::group::$stack"
-            if terraform -chdir="$stack" init -backend=false -input=false -lockfile=readonly \
+            if terraform -chdir="$stack" init -backend=false -input=false \
                && terraform -chdir="$stack" validate; then
               echo "::endgroup::"
             else
